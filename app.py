@@ -72,8 +72,8 @@ def fetch_data(ticker: str, period: str = "240d", interval: str = "1d") -> pd.Da
     try:
         df = yf.download(ticker, period=period, interval=interval, progress=False)
         if df.empty:
-            print(f"No data returned for {ticker}")
-            return pd.DataFrame()  # Return empty DF instead of raising error
+            print(f"No data for {ticker}")
+            return pd.DataFrame()
         return df
     except Exception as e:
         print(f"Error fetching {ticker}: {e}")
@@ -86,7 +86,6 @@ def check_conditions(df: pd.DataFrame, style: str, params: dict) -> bool:
     if df.empty:
         return False
 
-    df = df.copy()
     df["SMA20"] = sma(df["Close"], params.get("sma20", 20))
     df["SMA50"] = sma(df["Close"], params.get("sma50", 50))
     df["SMA200"] = sma(df["Close"], params.get("sma200", 200))
@@ -102,36 +101,4 @@ def check_conditions(df: pd.DataFrame, style: str, params: dict) -> bool:
         cond_ma = latest["SMA20"] > latest["SMA50"]
         cond_rsi = 40 <= latest["RSI14"] <= 60
         cond_vol = latest["Volume"] > latest["VOL20"]
-        consolidation_high = df["Close"].iloc[-(params["lookback_days"]+1):-1].max()
-        cond_breakout = (latest["Close"] > consolidation_high) and \
-                        (latest["Close"] <= consolidation_high * (1 + params["breakout_buffer"]))
-        return bool(cond_ma and cond_rsi and cond_vol and cond_breakout)
-
-    elif style == "Pullback":
-        cond_pullback = latest["Close"] < latest["SMA20"] and latest["Close"] > latest["SMA50"]
-        cond_rsi = latest["RSI14"] < 50
-        return bool(cond_pullback and cond_rsi)
-
-    elif style == "MA Crossover":
-        cond_ma = latest["SMA20"] > latest["SMA50"] and latest["SMA50"] > latest["SMA200"]
-        return bool(cond_ma)
-
-    elif style == "RSI Range":
-        return 40 <= latest["RSI14"] <= 60
-
-    return False
-
-# -----------------------------
-# Screen stocks
-# -----------------------------
-def screen_stocks(tickers: List[str], style: str, **params) -> pd.DataFrame:
-    results = []
-    for t in tickers:
-        df = fetch_data(t)
-        if df.empty:
-            continue
-        meets = check_conditions(df, style, params)
-        latest_close = df["Close"].iloc[-1]
-        latest_rsi = rsi(df["Close"]).iloc[-1]
-        sma20_val = sma(df["Close"], 20).iloc[-1]
-        sma50_val = sma(df["
+        consolidation_high = df["Close"].iloc[-(params["lookback
