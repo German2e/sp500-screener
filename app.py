@@ -127,15 +127,19 @@ if st.sidebar.button("Run Screener"):
     tickers = get_sp500_tickers()
     st.info(f"Scanning {len(tickers)} tickers for {style} strategy...")
     df_results = screen_stocks(tickers, style, **params)
-    matches = df_results[df_results["Meets_Entry"]]
-    st.success(f"Found {len(matches)} matches!")
-    st.dataframe(matches)
 
-    if not matches.empty:
-        csv = matches.to_csv(index=False).encode('utf-8')
-        st.download_button(
-            label="Download Matches as CSV",
-            data=csv,
-            file_name=f"{style.replace(' ', '_')}_matches.csv",
-            mime="text/csv"
-        )
+    if not df_results.empty and "Meets_Entry" in df_results.columns:
+        matches = df_results[df_results["Meets_Entry"]]
+        st.success(f"Found {len(matches)} matches!")
+        st.dataframe(matches)
+
+        if not matches.empty:
+            csv = matches.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                label="Download Matches as CSV",
+                data=csv,
+                file_name=f"{style.replace(' ', '_')}_matches.csv",
+                mime="text/csv"
+            )
+    else:
+        st.warning("No results found — try adjusting your parameters.")
