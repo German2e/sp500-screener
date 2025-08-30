@@ -12,14 +12,26 @@ from typing import List
 @st.cache_data
 def get_sp500_tickers() -> List[str]:
     url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
-    resp = requests.get(url)
-    soup = BeautifulSoup(resp.text, "html.parser")
-    table = soup.find("table", {"id": "constituents"})
-    tickers = []
-    for row in table.findAll("tr")[1:]:
-        ticker = row.findAll("td")[0].text.strip().replace(".", "-")
-        tickers.append(ticker)
-    return tickers
+    try:
+        resp = requests.get(url, timeout=10)
+        resp.raise_for_status()
+        soup = BeautifulSoup(resp.text, "html.parser")
+        table = soup.find("table", {"id": "constituents"})
+        if table is None:
+            table = soup.find("table", {"class": "wikitable"})
+            if table is None:
+                st.error("Could not find S&P500 table on Wikipedia.")
+                return []
+        tickers = []
+        for row in table.find_all("tr")[1:]:
+            cols = row.find_all("td")
+            if cols:
+                ticker = cols[0].text.strip().replace(".", "-")
+                tickers.append(ticker)
+        return tickers
+    except Exception as e:
+        st.error(f"Failed to fetch S&P500 tickers: {e}")
+        return []
 
 # -----------------------------
 # Indicators
@@ -46,9 +58,9 @@ def fetch_data(ticker: str, period: str = "600d", interval: str = "1d") -> pd.Da
     return df
 
 # -----------------------------
-# Condition checkers
+# Condition checkers (returns partial info for debug)
 # -----------------------------
-def check_conditions(df: pd.DataFrame, style: str, params: dict) -> bool:
+def check_conditions(df: pd.DataFrame, style: str, params: dict) -> (bool, dict):
     df = df.copy()
     df["SMA20"] = sma(df["Close"], params.get("sma20", 20))
     df["SMA50"] = sma(df["Close"], params.get("sma50", 50))
@@ -57,50 +69,69 @@ def check_conditions(df: pd.DataFrame, style: str, params: dict) -> bool:
     df["VOL20"] = sma(df["Volume"], 20)
 
     if df.shape[0] < max(50, params.get("lookback_days", 30)+1):
-        return False
+        return False, {}
 
     latest = df.iloc[-1]
+    partial = {}
 
     if style == "Momentum + Breakout":
-        cond_ma = latest["SMA20"] > latest["SMA50"]
-        cond_rsi = 40 <= latest["RSI14"] <= 60
-        cond_vol = latest["Volume"] > latest["VOL20"]
+        cond_ma = not pd.isna(latest["SMA20"]) and not pd.isna(latest["SMA50"]) and latest["SMA20"] > latest["SMA50"]
+        cond_rsi = not pd.isna(latest["RSI14"]) and 40 <= latest["RSI14"] <= 60
+        cond_vol = not pd.isna(latest["VOL20"]) and latest["Volume"] > latest["VOL20"]
+
         consolidation_high = df["Close"].iloc[-(params["lookback_days"]+1):-1].max()
-        cond_breakout = (latest["Close"] > consolidation_high) and (latest["Close"] <= consolidation_high * (1 + params["breakout_buffer"]))
-        return bool(cond_ma and cond_rsi and cond_vol and cond_breakout)
+        if pd.isna(consolidation_high):
+            cond_breakout = False
+        else:
+            cond_breakout = (latest["Close"] > consolidation_high) and \
+                             (latest["Close"] <= consolidation_high * (1 + params["breakout_buffer"]))
+
+        partial = {
+            "SMA20>SMA50": cond_ma,
+            "RSI40-60": cond_rsi,
+            "Volume>VOL20": cond_vol,
+            "Breakout": cond_breakout
+        }
+
+        return bool(cond_ma and cond_rsi and cond_vol and cond_breakout), partial
 
     elif style == "Pullback":
-        cond_pullback = latest["Close"] < latest["SMA20"] and latest["Close"] > latest["SMA50"]
-        cond_rsi = latest["RSI14"] < 50
-        return bool(cond_pullback and cond_rsi)
+        cond_pullback = not pd.isna(latest["SMA20"]) and not pd.isna(latest["SMA50"]) and latest["Close"] < latest["SMA20"] and latest["Close"] > latest["SMA50"]
+        cond_rsi = not pd.isna(latest["RSI14"]) and latest["RSI14"] < 50
+        partial = {"Pullback": cond_pullback, "RSI<50": cond_rsi}
+        return bool(cond_pullback and cond_rsi), partial
 
     elif style == "MA Crossover":
-        cond_ma = latest["SMA20"] > latest["SMA50"] and latest["SMA50"] > latest["SMA200"]
-        return bool(cond_ma)
+        cond_ma = not pd.isna(latest["SMA20"]) and not pd.isna(latest["SMA50"]) and not pd.isna(latest["SMA200"]) and latest["SMA20"] > latest["SMA50"] and latest["SMA50"] > latest["SMA200"]
+        partial = {"MA Crossover": cond_ma}
+        return cond_ma, partial
 
     elif style == "RSI Range":
-        return 40 <= latest["RSI14"] <= 60
+        cond_rsi = not pd.isna(latest["RSI14"]) and 40 <= latest["RSI14"] <= 60
+        partial = {"RSI40-60": cond_rsi}
+        return cond_rsi, partial
 
-    return False
+    return False, partial
 
 # -----------------------------
 # Main screener
 # -----------------------------
-def screen_stocks(tickers: List[str], style: str, **params) -> pd.DataFrame:
+def screen_stocks(tickers: List[str], style: str, debug: bool = False, **params) -> pd.DataFrame:
     results = []
     progress = st.progress(0)
     total = len(tickers)
     for i, t in enumerate(tickers):
         try:
             df = fetch_data(t)
-            meets = check_conditions(df, style, params)
+            meets, partial = check_conditions(df, style, params)
             latest_close = df["Close"].iloc[-1]
             latest_rsi = rsi(df["Close"]).iloc[-1]
             sma20_val = sma(df["Close"], 20).iloc[-1]
             sma50_val = sma(df["Close"], 50).iloc[-1]
             vol = df["Volume"].iloc[-1]
             vol20 = sma(df["Volume"], 20).iloc[-1]
-            results.append({
+
+            result = {
                 "Ticker": t,
                 "Meets_Entry": meets,
                 "Close": round(latest_close, 2),
@@ -109,10 +140,19 @@ def screen_stocks(tickers: List[str], style: str, **params) -> pd.DataFrame:
                 "SMA50": round(sma50_val, 2) if not np.isnan(sma50_val) else None,
                 "Volume": int(vol),
                 "VOL20": int(vol20) if not np.isnan(vol20) else None
-            })
+            }
+
+            if debug:
+                result["Debug"] = partial
+
+            results.append(result)
+
         except Exception as e:
-            print(f"Skipping {t}: {e}")
-        progress.progress((i+1)/total)
+            st.warning(f"Skipping {t}: {e}")
+
+        if total > 0:
+            progress.progress((i+1)/total)
+
     return pd.DataFrame(results)
 
 # -----------------------------
@@ -121,6 +161,7 @@ def screen_stocks(tickers: List[str], style: str, **params) -> pd.DataFrame:
 st.title("Multi-Style Stock Screener (S&P500)")
 
 style = st.sidebar.selectbox("Select Trading Style:", ["Momentum + Breakout", "Pullback", "MA Crossover", "RSI Range"])
+debug_mode = st.sidebar.checkbox("Enable Debug Mode", value=False)
 
 # Style parameters
 params = {}
@@ -133,17 +174,21 @@ params["sma200"] = st.sidebar.slider("SMA200", 50, 250, 200)
 # Run screener
 if st.sidebar.button("Run Screener"):
     tickers = get_sp500_tickers()
-    st.info(f"Scanning {len(tickers)} tickers for {style} strategy...")
-    df_results = screen_stocks(tickers, style, **params)
-    matches = df_results[df_results["Meets_Entry"]]
-    st.success(f"Found {len(matches)} matches!")
-    st.dataframe(matches)
+    if not tickers:
+        st.error("No tickers to scan. Check Wikipedia source or network connection.")
+    else:
+        st.info(f"Scanning {len(tickers)} tickers for {style} strategy...")
+        df_results = screen_stocks(tickers, style, debug=debug_mode, **params)
+        matches = df_results[df_results["Meets_Entry"]]
 
-    if not matches.empty:
-        csv = matches.to_csv(index=False).encode('utf-8')
-        st.download_button(
-            label="Download Matches as CSV",
-            data=csv,
-            file_name=f"{style.replace(' ', '_')}_matches.csv",
-            mime="text/csv"
-        )
+        st.success(f"Found {len(matches)} matches!")
+        st.dataframe(df_results if debug_mode else matches)
+
+        if not matches.empty:
+            csv = matches.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                label="Download Matches as CSV",
+                data=csv,
+                file_name=f"{style.replace(' ', '_')}_matches.csv",
+                mime="text/csv"
+            )
