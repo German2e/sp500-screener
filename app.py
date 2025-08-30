@@ -11,7 +11,7 @@ from typing import List
 # -----------------------------
 @st.cache_data
 def get_sp500_tickers() -> List[str]:
-    url = "https://stockanalysis.com/wp-content/uploads/2021/06/sp500.csv"
+    url = "https://datahub.io/core/s-and-p-500-companies/r/0.csv"
     df = pd.read_csv(url)
     tickers = df["Symbol"].str.replace(".", "-", regex=False).tolist()
     return tickers
