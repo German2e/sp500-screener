@@ -7,7 +7,7 @@ import streamlit as st
 from typing import List
 
 # -----------------------------
-# Get S&P500 tickers from Wikipedia (with User-Agent to avoid 403)
+# Get S&P500 tickers from Wikipedia (with User-Agent)
 # -----------------------------
 @st.cache_data
 def get_sp500_tickers() -> List[str]:
@@ -63,7 +63,7 @@ def fetch_data(ticker: str, period: str = "600d", interval: str = "1d") -> pd.Da
     return df
 
 # -----------------------------
-# Condition checkers (safe boolean checks)
+# Condition checkers (safe booleans)
 # -----------------------------
 def check_conditions(df: pd.DataFrame, style: str, params: dict) -> (bool, dict):
     df = df.copy()
@@ -93,12 +93,14 @@ def check_conditions(df: pd.DataFrame, style: str, params: dict) -> (bool, dict)
         cond_rsi = 40 <= float(rsi_val) <= 60
         cond_vol = latest["Volume"] > float(vol_val)
 
-        consolidation_high = df["Close"].iloc[-(params["lookback_days"]+1):-1].max()
-        if pd.isna(consolidation_high):
+        # Safe scalar max
+        consolidation_window = df["Close"].iloc[-(params["lookback_days"]+1):-1]
+        if consolidation_window.empty or consolidation_window.isna().all():
             cond_breakout = False
         else:
-            cond_breakout = (latest["Close"] > consolidation_high) and \
-                            (latest["Close"] <= consolidation_high * (1 + params["breakout_buffer"]))
+            consolidation_high = float(consolidation_window.max())
+            cond_breakout = (float(latest["Close"]) > consolidation_high) and \
+                            (float(latest["Close"]) <= consolidation_high * (1 + params["breakout_buffer"]))
 
         partial = {
             "SMA20>SMA50": cond_ma,
@@ -118,8 +120,8 @@ def check_conditions(df: pd.DataFrame, style: str, params: dict) -> (bool, dict)
         if pd.isna(sma20_val) or pd.isna(sma50_val) or pd.isna(rsi_val):
             return False, {}
 
-        cond_pullback = latest["Close"] < float(sma20_val) and latest["Close"] > float(sma50_val)
-        cond_rsi = rsi_val < 50
+        cond_pullback = float(latest["Close"]) < float(sma20_val) and float(latest["Close"]) > float(sma50_val)
+        cond_rsi = float(rsi_val) < 50
 
         partial = {"Pullback": cond_pullback, "RSI<50": cond_rsi}
         return bool(cond_pullback and cond_rsi), partial
