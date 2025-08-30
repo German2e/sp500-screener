@@ -117,5 +117,21 @@ def check_conditions(df: pd.DataFrame, style: str, params: dict) -> bool:
         return bool(cond_ma)
 
     elif style == "RSI Range":
-        return 40 <= latest["RSI14"] <= 
+        return 40 <= latest["RSI14"] <= 60
 
+    return False
+
+# -----------------------------
+# Screen stocks
+# -----------------------------
+def screen_stocks(tickers: List[str], style: str, **params) -> pd.DataFrame:
+    results = []
+    for t in tickers:
+        df = fetch_data(t)
+        if df.empty:
+            continue
+        meets = check_conditions(df, style, params)
+        latest_close = df["Close"].iloc[-1]
+        latest_rsi = rsi(df["Close"]).iloc[-1]
+        sma20_val = sma(df["Close"], 20).iloc[-1]
+        sma50_val = sma(df["
