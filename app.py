@@ -11,14 +11,9 @@ from typing import List
 # -----------------------------
 @st.cache_data
 def get_sp500_tickers() -> List[str]:
-    url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
-    resp = requests.get(url)
-    soup = BeautifulSoup(resp.text, "html.parser")
-    table = soup.find("table", {"id": "constituents"})
-    tickers = []
-    for row in table.findAll("tr")[1:]:
-        ticker = row.findAll("td")[0].text.strip().replace(".", "-")
-        tickers.append(ticker)
+    url = "https://stockanalysis.com/wp-content/uploads/2021/06/sp500.csv"
+    df = pd.read_csv(url)
+    tickers = df["Symbol"].str.replace(".", "-", regex=False).tolist()
     return tickers
 
 # -----------------------------
