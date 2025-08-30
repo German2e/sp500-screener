@@ -7,36 +7,42 @@ import streamlit as st
 from typing import List
 
 # -----------------------------
-# Get S&P500 tickers from Wikipedia (with User-Agent)
+# Get S&P500 tickers (Wiki + Finviz fallback)
 # -----------------------------
 @st.cache_data
 def get_sp500_tickers() -> List[str]:
-    url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                      "AppleWebKit/537.36 (KHTML, like Gecko) "
-                      "Chrome/115.0.0.0 Safari/537.36"
-    }
+    tickers = []
+
+    # --- Try Wikipedia first ---
     try:
+        url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
+        headers = {"User-Agent": "Mozilla/5.0"}
         resp = requests.get(url, headers=headers, timeout=10)
         resp.raise_for_status()
         soup = BeautifulSoup(resp.text, "html.parser")
         table = soup.find("table", {"id": "constituents"})
-        if table is None:
-            table = soup.find("table", {"class": "wikitable"})
-            if table is None:
-                st.error("Could not find S&P500 table on Wikipedia.")
-                return []
-        tickers = []
-        for row in table.find_all("tr")[1:]:
-            cols = row.find_all("td")
-            if cols:
-                ticker = cols[0].text.strip().replace(".", "-")
+        if table:
+            for row in table.findAll("tr")[1:]:
+                ticker = row.findAll("td")[0].text.strip().replace(".", "-")
                 tickers.append(ticker)
-        return tickers
     except Exception as e:
-        st.error(f"Failed to fetch S&P500 tickers: {e}")
-        return []
+        st.warning(f"Wikipedia fetch failed: {e}")
+
+    # --- Fallback to Finviz if Wiki fails ---
+    if not tickers:
+        try:
+            url = "https://finviz.com/screener.ashx?v=111&f=idx_sp500"
+            headers = {"User-Agent": "Mozilla/5.0"}
+            resp = requests.get(url, headers=headers, timeout=10)
+            resp.raise_for_status()
+            soup = BeautifulSoup(resp.text, "html.parser")
+            rows = soup.find_all("a", class_="screener-link-primary")
+            tickers = [r.text.strip() for r in rows if r.text.isupper()]
+        except Exception as e:
+            st.error(f"Finviz fetch failed: {e}")
+
+    return sorted(list(set(tickers)))
+
 
 # -----------------------------
 # Indicators
@@ -53,6 +59,7 @@ def rsi(series: pd.Series, window: int = 14) -> pd.Series:
     rs = ma_up / ma_down
     return 100 - (100 / (1 + rs))
 
+
 # -----------------------------
 # Fetch data
 # -----------------------------
@@ -62,10 +69,11 @@ def fetch_data(ticker: str, period: str = "600d", interval: str = "1d") -> pd.Da
         raise ValueError(f"No data for {ticker}")
     return df
 
+
 # -----------------------------
-# Condition checkers (safe booleans)
+# Condition checkers
 # -----------------------------
-def check_conditions(df: pd.DataFrame, style: str, params: dict) -> (bool, dict):
+def check_conditions(df: pd.DataFrame, style: str, params: dict) -> bool:
     df = df.copy()
     df["SMA20"] = sma(df["Close"], params.get("sma20", 20))
     df["SMA50"] = sma(df["Close"], params.get("sma50", 50))
@@ -73,102 +81,60 @@ def check_conditions(df: pd.DataFrame, style: str, params: dict) -> (bool, dict)
     df["RSI14"] = rsi(df["Close"], 14)
     df["VOL20"] = sma(df["Volume"], 20)
 
-    if df.shape[0] < max(50, params.get("lookback_days", 30)+1):
-        return False, {}
+    if df.shape[0] < max(50, params.get("lookback_days", 30) + 1):
+        return False
 
     latest = df.iloc[-1]
-    partial = {}
 
-    # Momentum + Breakout
     if style == "Momentum + Breakout":
-        sma20_val = latest["SMA20"]
-        sma50_val = latest["SMA50"]
-        rsi_val = latest["RSI14"]
-        vol_val = latest["VOL20"]
+        cond_ma = bool(latest["SMA20"] > latest["SMA50"])
+        cond_rsi = bool(40 <= latest["RSI14"] <= 60)
+        cond_vol = bool(latest["Volume"] > latest["VOL20"])
 
-        if pd.isna(sma20_val) or pd.isna(sma50_val) or pd.isna(rsi_val) or pd.isna(vol_val):
-            return False, {}
+        consolidation_window = df["Close"].iloc[-(params["lookback_days"]+1):-1].dropna()
+        if consolidation_window.empty:
+            return False
+        consolidation_high = consolidation_window.max()
 
-        cond_ma = float(sma20_val) > float(sma50_val)
-        cond_rsi = 40 <= float(rsi_val) <= 60
-        cond_vol = latest["Volume"] > float(vol_val)
+        cond_breakout = bool(
+            (latest["Close"] > consolidation_high) and 
+            (latest["Close"] <= consolidation_high * (1 + params["breakout_buffer"]))
+        )
+        return cond_ma and cond_rsi and cond_vol and cond_breakout
 
-        # Safe scalar max
-        consolidation_window = df["Close"].iloc[-(params["lookback_days"]+1):-1]
-        if consolidation_window.empty or consolidation_window.isna().all():
-            cond_breakout = False
-        else:
-            consolidation_high = float(consolidation_window.max())
-            cond_breakout = (float(latest["Close"]) > consolidation_high) and \
-                            (float(latest["Close"]) <= consolidation_high * (1 + params["breakout_buffer"]))
-
-        partial = {
-            "SMA20>SMA50": cond_ma,
-            "RSI40-60": cond_rsi,
-            "Volume>VOL20": cond_vol,
-            "Breakout": cond_breakout
-        }
-
-        return bool(cond_ma and cond_rsi and cond_vol and cond_breakout), partial
-
-    # Pullback
     elif style == "Pullback":
-        sma20_val = latest["SMA20"]
-        sma50_val = latest["SMA50"]
-        rsi_val = latest["RSI14"]
+        cond_pullback = bool(latest["Close"] < latest["SMA20"] and latest["Close"] > latest["SMA50"])
+        cond_rsi = bool(latest["RSI14"] < 50)
+        return cond_pullback and cond_rsi
 
-        if pd.isna(sma20_val) or pd.isna(sma50_val) or pd.isna(rsi_val):
-            return False, {}
-
-        cond_pullback = float(latest["Close"]) < float(sma20_val) and float(latest["Close"]) > float(sma50_val)
-        cond_rsi = float(rsi_val) < 50
-
-        partial = {"Pullback": cond_pullback, "RSI<50": cond_rsi}
-        return bool(cond_pullback and cond_rsi), partial
-
-    # MA Crossover
     elif style == "MA Crossover":
-        sma20_val = latest["SMA20"]
-        sma50_val = latest["SMA50"]
-        sma200_val = latest["SMA200"]
+        cond_ma = bool(latest["SMA20"] > latest["SMA50"] and latest["SMA50"] > latest["SMA200"])
+        return cond_ma
 
-        if pd.isna(sma20_val) or pd.isna(sma50_val) or pd.isna(sma200_val):
-            return False, {}
-
-        cond_ma = float(sma20_val) > float(sma50_val) and float(sma50_val) > float(sma200_val)
-        partial = {"MA Crossover": cond_ma}
-        return cond_ma, partial
-
-    # RSI Range
     elif style == "RSI Range":
-        rsi_val = latest["RSI14"]
-        if pd.isna(rsi_val):
-            return False, {}
-        cond_rsi = 40 <= float(rsi_val) <= 60
-        partial = {"RSI40-60": cond_rsi}
-        return cond_rsi, partial
+        return bool(40 <= latest["RSI14"] <= 60)
 
-    return False, partial
+    return False
+
 
 # -----------------------------
 # Main screener
 # -----------------------------
-def screen_stocks(tickers: List[str], style: str, debug: bool = False, **params) -> pd.DataFrame:
+def screen_stocks(tickers: List[str], style: str, **params) -> pd.DataFrame:
     results = []
     progress = st.progress(0)
     total = len(tickers)
     for i, t in enumerate(tickers):
         try:
             df = fetch_data(t)
-            meets, partial = check_conditions(df, style, params)
+            meets = check_conditions(df, style, params)
             latest_close = df["Close"].iloc[-1]
             latest_rsi = rsi(df["Close"]).iloc[-1]
             sma20_val = sma(df["Close"], 20).iloc[-1]
             sma50_val = sma(df["Close"], 50).iloc[-1]
             vol = df["Volume"].iloc[-1]
             vol20 = sma(df["Volume"], 20).iloc[-1]
-
-            result = {
+            results.append({
                 "Ticker": t,
                 "Meets_Entry": meets,
                 "Close": round(latest_close, 2),
@@ -177,20 +143,12 @@ def screen_stocks(tickers: List[str], style: str, debug: bool = False, **params)
                 "SMA50": round(sma50_val, 2) if not np.isnan(sma50_val) else None,
                 "Volume": int(vol),
                 "VOL20": int(vol20) if not np.isnan(vol20) else None
-            }
-
-            if debug:
-                result["Debug"] = partial
-
-            results.append(result)
-
+            })
         except Exception as e:
-            st.warning(f"Skipping {t}: {e}")
-
-        if total > 0:
-            progress.progress((i+1)/total)
-
+            print(f"Skipping {t}: {e}")
+        progress.progress((i+1)/total)
     return pd.DataFrame(results)
+
 
 # -----------------------------
 # Streamlit interface
@@ -198,7 +156,6 @@ def screen_stocks(tickers: List[str], style: str, debug: bool = False, **params)
 st.title("Multi-Style Stock Screener (S&P500)")
 
 style = st.sidebar.selectbox("Select Trading Style:", ["Momentum + Breakout", "Pullback", "MA Crossover", "RSI Range"])
-debug_mode = st.sidebar.checkbox("Enable Debug Mode", value=False)
 
 # Style parameters
 params = {}
@@ -212,14 +169,13 @@ params["sma200"] = st.sidebar.slider("SMA200", 50, 250, 200)
 if st.sidebar.button("Run Screener"):
     tickers = get_sp500_tickers()
     if not tickers:
-        st.error("No tickers to scan. Check Wikipedia source or network connection.")
+        st.error("No tickers to scan. Check both Wikipedia and Finviz sources.")
     else:
         st.info(f"Scanning {len(tickers)} tickers for {style} strategy...")
-        df_results = screen_stocks(tickers, style, debug=debug_mode, **params)
+        df_results = screen_stocks(tickers, style, **params)
         matches = df_results[df_results["Meets_Entry"]]
-
         st.success(f"Found {len(matches)} matches!")
-        st.dataframe(df_results if debug_mode else matches)
+        st.dataframe(matches)
 
         if not matches.empty:
             csv = matches.to_csv(index=False).encode('utf-8')
