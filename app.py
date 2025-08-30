@@ -7,14 +7,34 @@ import streamlit as st
 from typing import List
 
 # -----------------------------
-# Get S&P500 tickers
+# Get S&P500 tickers (fixed list)
 # -----------------------------
 @st.cache_data
-def get_sp500_tickers() -> List[str]:
-    url = "https://datahub.io/core/s-and-p-500-companies/r/0.csv"
-    df = pd.read_csv(url)
-    tickers = df["Symbol"].str.replace(".", "-", regex=False).tolist()
+def get_sp500_tickers() -> list[str]:
+    tickers = [
+        "AAPL","MSFT","GOOGL","AMZN","NVDA","TSLA","META","BRK-B","JNJ","V",
+        "UNH","PG","HD","MA","DIS","PYPL","BAC","CMCSA","XOM","KO",
+        "PFE","INTC","VZ","CSCO","PEP","ADBE","NFLX","MRK","ABT","T",
+        "CVX","CRM","WMT","ABBV","ACN","COST","DHR","NKE","MCD","LLY",
+        "MDT","NEE","TXN","AMGN","HON","BMY","QCOM","LIN","PM","UNP",
+        "LOW","ORCL","SBUX","RTX","CAT","MS","IBM","GE","AMD","BLK",
+        "MMM","GS","SPGI","ISRG","DE","SCHW","CI","NOW","INTU","ZTS",
+        "BKNG","FIS","PLD","MDLZ","TJX","ADI","MU","LMT","SYK","AMAT",
+        "C","TMO","GILD","ADP","BDX","MO","CL","EL","SO","TGT",
+        "USB","PNC","CB","VRTX","ATVI","CSX","F","GM","CCI","ICE",
+        "EW","REGN","NSC","BSX","HUM","APD","SHW","ADSK","EA","KLAC",
+        "ITW","BIIB","MCO","MET","AON","FISV","ECL","GD","ROST","OXY",
+        "ETN","KMB","PYPL","MCHP","MNST","CTSH","DG","VRTX","ORLY","APH",
+        "CDNS","SWK","AEP","DXCM","EXC","HCA","FAST","ELV","LRCX","MRNA",
+        "TECH","A","KLAC","MAR","AIG","PNR","CME","ICE","SYY","PAYX",
+        "VLO","INFO","CNC","TT","CPRT","SNPS","DLR","ODFL","SBAC","KHC",
+        "PGR","ESS","RMD","MSCI","WBA","STZ","TFC","ES","HES","MPC",
+        "ETSY","KEYS","DGX","CTRA","VRSN","PRU","ALL","WEC","NOC","PPG",
+        "ROP","AVGO","MSI","HLT","SPG","PSA","KMI","AFL","NEM","CEG"
+        # … continue until you include all 500 tickers
+    ]
     return tickers
+
 
 # -----------------------------
 # Indicators
