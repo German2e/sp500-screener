@@ -8,16 +8,49 @@ import time
 # -----------------------------
 # Preloaded S&P 500 tickers (latest)
 # -----------------------------
+import streamlit as st
+from typing import List
+
 @st.cache_data
 def get_sp500_tickers() -> List[str]:
-    return [
-        "AAPL","MSFT","GOOGL","AMZN","FB","TSLA","NVDA","JPM","V","JNJ","UNH","HD","PG","MA",
-        "DIS","PYPL","BAC","CMCSA","ADBE","NFLX","KO","XOM","NKE","PFE","MRK","VZ","INTC",
-        "T","CSCO","PEP","ABT","CVX","CRM","ACN","WMT","ORCL","ABBV","COST","AVGO","QCOM",
-        "MDT","MCD","TXN","LLY","NEE","DHR","BMY","HON","PM","UNP","LIN","LOW","IBM","SBUX",
-        "RTX","GE","AMD","ALNY","LYB","DD","LNG","PSX","LDOS","GH","MSTR"
-        # ... add remaining tickers if needed
+    tickers = [
+        "MMM","AOS","ABT","ABBV","ACN","ATVI","ADBE","AMD","AAP","AES","AFL","A","APD",
+        "AKAM","ALK","ALB","ARE","ALXN","ALGN","ALLE","LNT","ALL","GOOGL","GOOG","MO","AMZN",
+        "AMCR","AEE","AAL","AEP","AXP","AIG","AMT","AWK","AMP","ABC","AME","AMGN","APH","ADI",
+        "ANSS","ANTM","AON","AOS","APA","AAPL","AMAT","APTV","ADM","ARNC","ANET","AJG","AIZ",
+        "T","ADSK","ADP","AZO","AVB","AVY","BKR","BLL","BAC","BK","BAX","BDX","BRK.B","BBY",
+        "BIO","BIIB","BLK","BA","BKNG","BWA","BXP","BSX","BMY","AVGO","BR","BF.B","CHRW","COG",
+        "CDNS","CPB","COF","CAH","KMX","CCL","CARR","CTLT","CAT","CBOE","CBRE","CDW","CE","CNC",
+        "CNP","CDAY","CF","CRL","SCHW","CHTR","CVX","CMG","CB","CHD","CI","CINF","CTAS","CSCO",
+        "C","CFG","CTXS","CLX","CME","CMS","KO","CTSH","CL","CMCSA","CMA","CAG","COP","ED","STZ",
+        "COO","CPRT","GLW","CTVA","COST","CCI","CSX","CMI","CVS","DHI","DHR","DRI","DVA","DE",
+        "DAL","XRAY","DVN","DXC","FANG","DLR","DFS","DISCA","DISCK","DISH","DG","DLTR","D",
+        "DOV","DOW","DTE","DUK","DRE","DD","DXC","ETFC","EMN","ETN","EBAY","ECL","EIX","EW","EA",
+        "EMR","ETR","EVRG","ESS","EL","ETSY","RE","EXC","EXPE","EXPD","EXR","XOM","FFIV","FB",
+        "FAST","FRT","FDX","FIS","FITB","FRC","FE","FISV","FLT","FMC","F","FTNT","FTV","FBHS",
+        "FOXA","FOX","BEN","FCX","GPS","GRMN","IT","GE","GNRC","GD","GEHC","GILD","GL","GLPI",
+        "GM","GOOG","GOOGL","GPC","GILD","GIS","GM","GPN","GS","GWW","HAL","HBI","HIG","HAS",
+        "HCA","PEAK","HSIC","HSY","HES","HPE","HLT","HOLX","HD","HON","HRL","HST","HWM","HPQ",
+        "HUM","HBAN","HII","IEX","IDXX","INFO","ITW","ILMN","INCY","IR","INTC","ICE","IBM","IP",
+        "IPG","IFF","INTU","ISRG","IVZ","IPGP","IQV","IRM","JKHY","J","JBHT","SJM","JNJ","JCI",
+        "JPM","JNPR","KSU","K","KEY","KEYS","KMB","KIM","KMI","KLAC","KSS","KHC","KR","LHX",
+        "LH","LRCX","LM","LEG","LEN","LLY","LNC","LIN","LYV","LKQ","LMT","L","LOW","LUMN","LYB",
+        "MTB","MAC","M","MRO","MPC","MAR","MMC","MAS","MA","MKTX","MAT","MKC","MCD","MCK","MDT",
+        "MRK","MET","MTD","MGM","MCHP","MU","MSFT","MAA","MHK","TAP","MDLZ","MPWR","MNST","MCO",
+        "MS","MOS","MSI","MSCI","MYL","NDAQ","NOV","NKTR","NTAP","NFLX","NWL","NEM","NEE","NLSN",
+        "NKE","NI","NBL","JWN","NSC","NTRS","NOC","NUE","NVDA","NVR","NXPI","ORLY","OXY","OMC",
+        "OKE","ORCL","OTIS","PCAR","PKG","PARA","PAYX","PYPL","PNR","PBCT","PEP","PKI","PRGO",
+        "PFE","PM","PSX","PNW","PXD","PNC","PPG","PPL","PFG","PG","PGR","PLD","PRU","PEG",
+        "PSA","PH","PVH","QRVO","PWR","QCOM","DGX","RL","RJF","RTX","O","REG","REGN","RF","RSG",
+        "RMD","RHI","ROK","ROL","ROP","ROST","RCL","SPGI","CRM","SBAC","SLB","STX","SEE","SRE",
+        "NOW","SHW","SPG","SWKS","SNA","SO","LUV","SPGI","SWK","SBUX","STT","STE","SYK","SIVB",
+        "SYF","SNPS","SYY","TMUS","TROW","TTWO","TPR","TGT","TEL","TDY","TFX","TXN","TXT","TMO",
+        "TJX","TSCO","TDG","TRV","TRMB","TFC","TWTR","TSN","UDR","ULTA","USB","UAA","UNP","UAL",
+        "UNH","UPS","URI","UHS","VLO","VTR","VRSN","VZ","VFC","VIAC","V","VNO","VMC","WRB","WAB",
+        "WMT","WBA","WM","WAT","WEC","WFC","WELL","WST","WSM","WY","WHR","WMB","WLTW","WYNN",
+        "XEL","XRX","XLNX","XYL","YUM","ZBRA","ZBH","ZION","ZTS"
     ]
+    return tickers
 
 # -----------------------------
 # Indicators
