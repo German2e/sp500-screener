@@ -12,28 +12,35 @@ from typing import List
 @st.cache_data
 def get_sp500_tickers() -> list[str]:
     tickers = [
-        "AAPL","MSFT","GOOGL","AMZN","NVDA","TSLA","META","BRK-B","JNJ","V",
-        "UNH","PG","HD","MA","DIS","PYPL","BAC","CMCSA","XOM","KO",
-        "PFE","INTC","VZ","CSCO","PEP","ADBE","NFLX","MRK","ABT","T",
-        "CVX","CRM","WMT","ABBV","ACN","COST","DHR","NKE","MCD","LLY",
-        "MDT","NEE","TXN","AMGN","HON","BMY","QCOM","LIN","PM","UNP",
-        "LOW","ORCL","SBUX","RTX","CAT","MS","IBM","GE","AMD","BLK",
-        "MMM","GS","SPGI","ISRG","DE","SCHW","CI","NOW","INTU","ZTS",
-        "BKNG","FIS","PLD","MDLZ","TJX","ADI","MU","LMT","SYK","AMAT",
-        "C","TMO","GILD","ADP","BDX","MO","CL","EL","SO","TGT",
-        "USB","PNC","CB","VRTX","ATVI","CSX","F","GM","CCI","ICE",
-        "EW","REGN","NSC","BSX","HUM","APD","SHW","ADSK","EA","KLAC",
-        "ITW","BIIB","MCO","MET","AON","FISV","ECL","GD","ROST","OXY",
-        "ETN","KMB","PYPL","MCHP","MNST","CTSH","DG","VRTX","ORLY","APH",
-        "CDNS","SWK","AEP","DXCM","EXC","HCA","FAST","ELV","LRCX","MRNA",
-        "TECH","A","KLAC","MAR","AIG","PNR","CME","ICE","SYY","PAYX",
-        "VLO","INFO","CNC","TT","CPRT","SNPS","DLR","ODFL","SBAC","KHC",
-        "PGR","ESS","RMD","MSCI","WBA","STZ","TFC","ES","HES","MPC",
-        "ETSY","KEYS","DGX","CTRA","VRSN","PRU","ALL","WEC","NOC","PPG",
-        "ROP","AVGO","MSI","HLT","SPG","PSA","KMI","AFL","NEM","CEG"
-        # … continue until you include all 500 tickers
+        "MMM", "AOS", "ABT", "ABBV", "ACN", "ATVI", "AYI", "ADBE", "AAP", "AMD",
+        "AES", "AFL", "A", "APD", "AKAM", "ALK", "ALL", "GOOGL", "GOOG", "MO",
+        "AMZN", "AMCR", "AEE", "AAL", "APA", "AAPL", "AMAT", "APTV", "ADM", "ARNC",
+        "AJG", "AIZ", "T", "ADSK", "ADP", "AZO", "AVB", "AVGO", "BA", "BKR", "BLL",
+        "BAC", "BBY", "BDX", "BRK-B", "BBWI", "BIO", "BIIB", "BLK", "BAH", "BWA",
+        "BSX", "BMY", "BR", "CHRW", "COG", "CDW", "CPB", "COF", "CAH", "KMX", "CCL",
+        "CAT", "CBOE", "CBRE", "CDNS", "CE", "CNC", "CNP", "CTAS", "CSCO", "C", "CFG",
+        "CTVA", "CLX", "CME", "CMS", "KO", "CTSH", "CL", "CMG", "CB", "CHD", "CHTR",
+        "CVX", "CMI", "COST", "CCI", "CSX", "CARR", "CTVA", "CME", "CVS", "DHI", "DHR",
+        "DRI", "DOV", "DOW", "DTE", "DUK", "DXCM", "EMR", "ETN", "EBAY", "ECL", "EIX",
+        "EW", "EA", "LLY", "EMN", "ETR", "EVRG", "ES", "EXC", "EXPD", "EXR", "FFIV",
+        "FIS", "FISV", "FLT", "FMC", "F", "FTNT", "FTV", "GD", "GE", "GIS", "GM", "GOOG",
+        "GPC", "GILD", "GLW", "GS", "HAL", "HBI", "HOG", "HCA", "PEAK", "HSY", "HES",
+        "HPE", "HUM", "HON", "HRL", "HST", "HII", "IBM", "IDXX", "ILMN", "INCY", "INTC",
+        "ICE", "IP", "IPG", "IQV", "IRM", "J", "JBHT", "JNJ", "JPM", "K", "KEYS", "KMB",
+        "KIM", "KMI", "KLAC", "KSS", "KHC", "LHX", "LH", "LMT", "L", "LOW", "LIN", "LYB",
+        "LNC", "LVS", "MA", "MKC", "MCD", "MCK", "MDT", "MRK", "META", "MET", "MPWR",
+        "MS", "MSFT", "MAA", "NDAQ", "NEM", "NFLX", "NOC", "NUE", "NVDA", "NVR", "ORLY",
+        "OXY", "ODFL", "OMC", "OKE", "ORCL", "PCAR", "PEP", "PKI", "PM", "PNC", "POOL",
+        "PPG", "PPL", "PFE", "PSA", "PH", "PYPL", "PNR", "PXD", "QRVO", "QCOM", "DGX",
+        "RCL", "RTX", "REG", "REGN", "RF", "RSG", "RMD", "ROP", "ROST", "RHI", "SPGI",
+        "CRM", "SLB", "SNA", "SO", "LUV", "SWK", "SYY", "SPG", "SYF", "SNPS", "SIVB",
+        "SWKS", "SBUX", "STT", "STE", "SYK", "SIVB", "SYY", "TFC", "TMO", "TJX", "TSLA",
+        "TXN", "TDG", "TRV", "TFC", "TGT", "TROW", "TT", "TDY", "UNH", "UPS", "URI", "UTX",
+        "UHS", "VFC", "VLO", "VMC", "VZ", "VRTX", "V", "WMT", "WBA", "WM", "WBD", "WDC",
+        "WEC", "WFC", "WELL", "WMB", "WRB", "WU", "WY", "XEL", "XYL", "YUM", "ZBRA", "ZTS"
     ]
     return tickers
+
 
 
 # -----------------------------
