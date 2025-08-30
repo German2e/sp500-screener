@@ -7,13 +7,18 @@ import streamlit as st
 from typing import List
 
 # -----------------------------
-# Get S&P500 tickers from Wikipedia
+# Get S&P500 tickers from Wikipedia (with User-Agent to avoid 403)
 # -----------------------------
 @st.cache_data
 def get_sp500_tickers() -> List[str]:
     url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                      "AppleWebKit/537.36 (KHTML, like Gecko) "
+                      "Chrome/115.0.0.0 Safari/537.36"
+    }
     try:
-        resp = requests.get(url, timeout=10)
+        resp = requests.get(url, headers=headers, timeout=10)
         resp.raise_for_status()
         soup = BeautifulSoup(resp.text, "html.parser")
         table = soup.find("table", {"id": "constituents"})
@@ -78,13 +83,8 @@ def check_conditions(df: pd.DataFrame, style: str, params: dict) -> (bool, dict)
         cond_ma = not pd.isna(latest["SMA20"]) and not pd.isna(latest["SMA50"]) and latest["SMA20"] > latest["SMA50"]
         cond_rsi = not pd.isna(latest["RSI14"]) and 40 <= latest["RSI14"] <= 60
         cond_vol = not pd.isna(latest["VOL20"]) and latest["Volume"] > latest["VOL20"]
-
         consolidation_high = df["Close"].iloc[-(params["lookback_days"]+1):-1].max()
-        if pd.isna(consolidation_high):
-            cond_breakout = False
-        else:
-            cond_breakout = (latest["Close"] > consolidation_high) and \
-                             (latest["Close"] <= consolidation_high * (1 + params["breakout_buffer"]))
+        cond_breakout = (not pd.isna(consolidation_high)) and (latest["Close"] > consolidation_high) and (latest["Close"] <= consolidation_high * (1 + params["breakout_buffer"]))
 
         partial = {
             "SMA20>SMA50": cond_ma,
