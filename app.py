@@ -126,8 +126,25 @@ params["sma200"] = st.sidebar.slider("SMA200", 50, 250, 200)
 if st.sidebar.button("Run Screener"):
     tickers = get_sp500_tickers()
     st.info(f"Scanning {len(tickers)} tickers for {style} strategy...")
+
+    # Run the screener
     df_results = screen_stocks(tickers, style, **params)
 
+    # ---- DEBUG LOGGING ----
+    if not df_results.empty:
+        st.subheader("Sample of fetched data (first 5 tickers):")
+        st.dataframe(df_results.head(5))
+
+        st.write(f"Columns fetched: {df_results.columns.tolist()}")
+        st.write(f"Total tickers scanned: {len(df_results)}")
+
+        # Show statistics on Meets_Entry column if exists
+        if "Meets_Entry" in df_results.columns:
+            st.write(df_results["Meets_Entry"].value_counts())
+    else:
+        st.warning("No data returned for tickers — check your fetch_data function or parameters.")
+
+    # ---- FILTER MATCHES ----
     if not df_results.empty and "Meets_Entry" in df_results.columns:
         matches = df_results[df_results["Meets_Entry"]]
         st.success(f"Found {len(matches)} matches!")
@@ -143,3 +160,4 @@ if st.sidebar.button("Run Screener"):
             )
     else:
         st.warning("No results found — try adjusting your parameters.")
+
