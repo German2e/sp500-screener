@@ -8,7 +8,7 @@ from typing import List
 # Get S&P500 tickers (fixed list)
 # -----------------------------
 @st.cache_data
-def get_sp500_tickers() -> list[str]:
+def get_sp500_tickers() -> List[str]:
     tickers = [
         "MMM","ACE","ABT","ANF","ACN","ADBE","AMD","AES","AET","AFL","A","GAS","APD",
         "ARG","AKAM","AA","ALXN","ATI","AGN","ALL","ANR","ALTR","MO","AMZN","AEE","AEP",
@@ -66,59 +66,54 @@ def rsi(series: pd.Series, window: int = 14) -> pd.Series:
     return 100 - (100 / (1 + rs))
 
 # -----------------------------
-# Fetch data safely
+# Fetch data
 # -----------------------------
 def fetch_data(ticker: str, period: str = "240d", interval: str = "1d") -> pd.DataFrame:
-    try:
-        df = yf.download(ticker, period=period, interval=interval, progress=False)
-        if df.empty:
-            print(f"No data for {ticker}")
-            return pd.DataFrame()
-        return df
-    except Exception as e:
-        print(f"Error fetching {ticker}: {e}")
-        return pd.DataFrame()
-
-# -----------------------------
-# Condition checkers
-# -----------------------------
-def check_conditions(df: pd.DataFrame, style: str, params: dict) -> bool:
+    df = yf.download(ticker, period=period, interval=interval, progress=False)
     if df.empty:
-        return False
+        raise ValueError(f"No data for {ticker}")
+    return df
 
+# -----------------------------
+# Condition checkers (NaN safe + partial match)
+# -----------------------------
+def check_conditions(df: pd.DataFrame, style: str, params: dict) -> dict:
+    df = df.copy()
     df["SMA20"] = sma(df["Close"], params.get("sma20", 20))
     df["SMA50"] = sma(df["Close"], params.get("sma50", 50))
     df["SMA200"] = sma(df["Close"], params.get("sma200", 200))
     df["RSI14"] = rsi(df["Close"], 14)
     df["VOL20"] = sma(df["Volume"], 20)
 
-    if df.shape[0] < max(50, params.get("lookback_days", 30)+1):
-        return False
-
     latest = df.iloc[-1]
+    partial = {}
 
     if style == "Momentum + Breakout":
-        cond_ma = latest["SMA20"] > latest["SMA50"]
-        cond_rsi = 40 <= latest["RSI14"] <= 60
-        cond_vol = latest["Volume"] > latest["VOL20"]
+        partial["SMA20>SMA50"] = pd.notna(latest["SMA20"]) and pd.notna(latest["SMA50"]) and latest["SMA20"] > latest["SMA50"]
+        partial["RSI_in_range"] = pd.notna(latest["RSI14"]) and 40 <= latest["RSI14"] <= 60
+        partial["Vol>Vol20"] = pd.notna(latest["VOL20"]) and latest["Volume"] > latest["VOL20"]
         consolidation_high = df["Close"].iloc[-(params["lookback_days"]+1):-1].max()
-        cond_breakout = (latest["Close"] > consolidation_high) and \
-                        (latest["Close"] <= consolidation_high * (1 + params["breakout_buffer"]))
-        return bool(cond_ma and cond_rsi and cond_vol and cond_breakout)
+        partial["Breakout"] = pd.notna(consolidation_high) and latest["Close"] > consolidation_high and latest["Close"] <= consolidation_high * (1 + params["breakout_buffer"])
+        meets = all(partial.values())
 
     elif style == "Pullback":
-        cond_pullback = latest["Close"] < latest["SMA20"] and latest["Close"] > latest["SMA50"]
-        cond_rsi = latest["RSI14"] < 50
-        return bool(cond_pullback and cond_rsi)
+        partial["Close<SMA20"] = pd.notna(latest["SMA20"]) and latest["Close"] < latest["SMA20"]
+        partial["Close>SMA50"] = pd.notna(latest["SMA50"]) and latest["Close"] > latest["SMA50"]
+        partial["RSI<50"] = pd.notna(latest["RSI14"]) and latest["RSI14"] < 50
+        meets = all(partial.values())
 
     elif style == "MA Crossover":
-        cond_ma = latest["SMA20"] > latest["SMA50"] and latest["SMA50"] > latest["SMA200"]
-        return bool(cond_ma)
+        partial["SMA20>SMA50>SMA200"] = pd.notna(latest["SMA20"]) and pd.notna(latest["SMA50"]) and pd.notna(latest["SMA200"]) and latest["SMA20"] > latest["SMA50"] > latest["SMA200"]
+        meets = all(partial.values())
 
     elif style == "RSI Range":
-        return 40 <= latest["RSI14"] <= 60
+        partial["RSI_in_range"] = pd.notna(latest["RSI14"]) and 40 <= latest["RSI14"] <= 60
+        meets = all(partial.values())
 
-    return False
+    else:
+        meets = False
+
+    return {"meets": meets, "partial": partial}
 
 # -----------------------------
 # Screen stocks
@@ -126,26 +121,29 @@ def check_conditions(df: pd.DataFrame, style: str, params: dict) -> bool:
 def screen_stocks(tickers: List[str], style: str, **params) -> pd.DataFrame:
     results = []
     for t in tickers:
-        df = fetch_data(t)
-        if df.empty:
-            continue
-        meets = check_conditions(df, style, params)
-        latest_close = df["Close"].iloc[-1]
-        latest_rsi = rsi(df["Close"]).iloc[-1]
-        sma20_val = sma(df["Close"], 20).iloc[-1]
-        sma50_val = sma(df["Close"], 50).iloc[-1]
-        vol = df["Volume"].iloc[-1]
-        vol20 = sma(df["Volume"], 20).iloc[-1]
-        results.append({
-            "Ticker": t,
-            "Meets_Entry": meets,
-            "Close": round(latest_close, 2),
-            "RSI14": round(latest_rsi, 2) if not np.isnan(latest_rsi) else None,
-            "SMA20": round(sma20_val, 2) if not np.isnan(sma20_val) else None,
-            "SMA50": round(sma50_val, 2) if not np.isnan(sma50_val) else None,
-            "Volume": int(vol),
-            "VOL20": int(vol20) if not np.isnan(vol20) else None
-        })
+        try:
+            df = fetch_data(t)
+            conds = check_conditions(df, style, params)
+            latest_close = df["Close"].iloc[-1]
+            latest_rsi = rsi(df["Close"]).iloc[-1] if not df.empty else None
+            sma20_val = sma(df["Close"], 20).iloc[-1] if not df.empty else None
+            sma50_val = sma(df["Close"], 50).iloc[-1] if not df.empty else None
+            vol = df["Volume"].iloc[-1] if not df.empty else None
+            vol20 = sma(df["Volume"], 20).iloc[-1] if not df.empty else None
+
+            results.append({
+                "Ticker": t,
+                "Meets_Entry": conds["meets"],
+                "Partial_Match": conds["partial"],
+                "Close": round(latest_close,2) if latest_close else None,
+                "RSI14": round(latest_rsi,2) if latest_rsi else None,
+                "SMA20": round(sma20_val,2) if sma20_val else None,
+                "SMA50": round(sma50_val,2) if sma50_val else None,
+                "Volume": int(vol) if vol else None,
+                "VOL20": int(vol20) if vol20 else None
+            })
+        except Exception as e:
+            print(f"Skipping {t}: {e}")
     return pd.DataFrame(results)
 
 # -----------------------------
@@ -168,18 +166,23 @@ if st.sidebar.button("Run Screener"):
     df_results = screen_stocks(tickers, style, **params)
 
     if not df_results.empty:
-        st.subheader("Sample of fetched data (first 5 tickers):")
-        st.dataframe(df_results.head(5))
+        st.subheader("Sample of scanned tickers")
+        st.dataframe(df_results.head(10))
+
+        # Show partial match info
+        st.subheader("Partial match examples")
+        st.dataframe(df_results[["Ticker","Partial_Match"]].head(10))
+
         matches = df_results[df_results["Meets_Entry"]]
-        st.success(f"Found {len(matches)} matches!")
-        st.dataframe(matches)
+        st.success(f"Found {len(matches)} full matches!")
         if not matches.empty:
+            st.dataframe(matches)
             csv = matches.to_csv(index=False).encode('utf-8')
             st.download_button(
                 label="Download Matches as CSV",
                 data=csv,
-                file_name=f"{style.replace(' ', '_')}_matches.csv",
+                file_name=f"{style.replace(' ','_')}_matches.csv",
                 mime="text/csv"
             )
     else:
-        st.warning("No results found — check your fetch_data function or parameters.")
+        st.warning("No data returned — check fetch_data or parameters.")
