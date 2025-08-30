@@ -9,6 +9,9 @@ from typing import List
 # -----------------------------
 # Get S&P500 tickers (fixed list)
 # -----------------------------
+# -----------------------------
+# Get S&P500 tickers (full list)
+# -----------------------------
 @st.cache_data
 def get_sp500_tickers() -> list[str]:
     tickers = [
@@ -40,7 +43,6 @@ def get_sp500_tickers() -> list[str]:
         "WEC", "WFC", "WELL", "WMB", "WRB", "WU", "WY", "XEL", "XYL", "YUM", "ZBRA", "ZTS"
     ]
     return tickers
-
 
 
 # -----------------------------
