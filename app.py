@@ -9,40 +9,49 @@ from typing import List
 # -----------------------------
 # Get S&P500 tickers (fixed list)
 # -----------------------------
-# -----------------------------
-# Get S&P500 tickers (full list)
-# -----------------------------
 @st.cache_data
 def get_sp500_tickers() -> list[str]:
     tickers = [
-        "MMM", "AOS", "ABT", "ABBV", "ACN", "ATVI", "AYI", "ADBE", "AAP", "AMD",
-        "AES", "AFL", "A", "APD", "AKAM", "ALK", "ALL", "GOOGL", "GOOG", "MO",
-        "AMZN", "AMCR", "AEE", "AAL", "APA", "AAPL", "AMAT", "APTV", "ADM", "ARNC",
-        "AJG", "AIZ", "T", "ADSK", "ADP", "AZO", "AVB", "AVGO", "BA", "BKR", "BLL",
-        "BAC", "BBY", "BDX", "BRK-B", "BBWI", "BIO", "BIIB", "BLK", "BAH", "BWA",
-        "BSX", "BMY", "BR", "CHRW", "COG", "CDW", "CPB", "COF", "CAH", "KMX", "CCL",
-        "CAT", "CBOE", "CBRE", "CDNS", "CE", "CNC", "CNP", "CTAS", "CSCO", "C", "CFG",
-        "CTVA", "CLX", "CME", "CMS", "KO", "CTSH", "CL", "CMG", "CB", "CHD", "CHTR",
-        "CVX", "CMI", "COST", "CCI", "CSX", "CARR", "CTVA", "CME", "CVS", "DHI", "DHR",
-        "DRI", "DOV", "DOW", "DTE", "DUK", "DXCM", "EMR", "ETN", "EBAY", "ECL", "EIX",
-        "EW", "EA", "LLY", "EMN", "ETR", "EVRG", "ES", "EXC", "EXPD", "EXR", "FFIV",
-        "FIS", "FISV", "FLT", "FMC", "F", "FTNT", "FTV", "GD", "GE", "GIS", "GM", "GOOG",
-        "GPC", "GILD", "GLW", "GS", "HAL", "HBI", "HOG", "HCA", "PEAK", "HSY", "HES",
-        "HPE", "HUM", "HON", "HRL", "HST", "HII", "IBM", "IDXX", "ILMN", "INCY", "INTC",
-        "ICE", "IP", "IPG", "IQV", "IRM", "J", "JBHT", "JNJ", "JPM", "K", "KEYS", "KMB",
-        "KIM", "KMI", "KLAC", "KSS", "KHC", "LHX", "LH", "LMT", "L", "LOW", "LIN", "LYB",
-        "LNC", "LVS", "MA", "MKC", "MCD", "MCK", "MDT", "MRK", "META", "MET", "MPWR",
-        "MS", "MSFT", "MAA", "NDAQ", "NEM", "NFLX", "NOC", "NUE", "NVDA", "NVR", "ORLY",
-        "OXY", "ODFL", "OMC", "OKE", "ORCL", "PCAR", "PEP", "PKI", "PM", "PNC", "POOL",
-        "PPG", "PPL", "PFE", "PSA", "PH", "PYPL", "PNR", "PXD", "QRVO", "QCOM", "DGX",
-        "RCL", "RTX", "REG", "REGN", "RF", "RSG", "RMD", "ROP", "ROST", "RHI", "SPGI",
-        "CRM", "SLB", "SNA", "SO", "LUV", "SWK", "SYY", "SPG", "SYF", "SNPS", "SIVB",
-        "SWKS", "SBUX", "STT", "STE", "SYK", "SIVB", "SYY", "TFC", "TMO", "TJX", "TSLA",
-        "TXN", "TDG", "TRV", "TFC", "TGT", "TROW", "TT", "TDY", "UNH", "UPS", "URI", "UTX",
-        "UHS", "VFC", "VLO", "VMC", "VZ", "VRTX", "V", "WMT", "WBA", "WM", "WBD", "WDC",
-        "WEC", "WFC", "WELL", "WMB", "WRB", "WU", "WY", "XEL", "XYL", "YUM", "ZBRA", "ZTS"
+        "MMM","ACE","ABT","ANF","ACN","ADBE","AMD","AES","AET","AFL","A","GAS","APD",
+        "ARG","AKAM","AA","ALXN","ATI","AGN","ALL","ANR","ALTR","MO","AMZN","AEE","AEP",
+        "AXP","AIG","AMT","AMP","ABC","AMGN","APH","APC","ADI","AON","APA","AIV","APOL",
+        "AAPL","AMAT","ADM","AIZ","T","ADSK","ADP","AN","AZO","AVB","AVY","AVP","BHI",
+        "BLL","BAC","BK","BCR","BAX","BBT","BEAM","BDX","BBBY","BMS","BRK.B","BBY","BIG",
+        "BIIB","BLK","HRB","BMC","BA","BWA","BXP","BSX","BMY","BRCM","BF.B","CHRW","CA",
+        "CVC","COG","CAM","CPB","COF","CAH","CFN","KMX","CCL","CAT","CBG","CBS","CELG",
+        "CNP","CTL","CERN","CF","SCHW","CHK","CVX","CMG","CB","CI","CINF","CTAS","CSCO",
+        "C","CTXS","CLF","CLX","CME","CMS","COH","KO","CCE","CTSH","CL","CMCSA","CMA",
+        "CSC","CAG","COP","CNX","ED","STZ","CBE","GLW","COST","CVH","COV","CCI","CSX",
+        "CMI","CVS","DHI","DHR","DRI","DVA","DF","DE","DELL","DNR","XRAY","DVN","DV","DO",
+        "DTV","DFS","DISCA","DLTR","D","RRD","DOV","DOW","DPS","DTE","DD","DUK","DNB",
+        "ETFC","EMN","ETN","EBAY","ECL","EIX","EW","EA","EMC","EMR","ESV","ETR","EOG",
+        "EQT","EFX","EQR","EL","EXC","EXPE","EXPD","ESRX","XOM","FFIV","FDO","FAST","FII",
+        "FDX","FIS","FITB","FHN","FSLR","FE","FISV","FLIR","FLS","FLR","FMC","FTI","F",
+        "FRX","FOSL","BEN","FCX","FTR","GME","GCI","GPS","GD","GE","GIS","GPC","GNW","GILD",
+        "GS","GT","GOOG","GWW","HAL","HOG","HAR","HRS","HIG","HAS","HCP","HCN","HNZ","HP",
+        "HES","HPQ","HD","HON","HRL","HSP","HST","HCBK","HUM","HBAN","ITW","IR","TEG","INTC",
+        "ICE","IBM","IFF","IGT","IP","IPG","INTU","ISRG","IVZ","IRM","JBL","JEC","JDSU",
+        "JNJ","JCI","JOY","JPM","JNPR","K","KEY","KMB","KIM","KMI","KLAC","KSS","KFT","KR",
+        "LLL","LH","LRCX","LM","LEG","LEN","LUK","LXK","LIFE","LLY","LTD","LNC","LLTC","LMT",
+        "L","LO","LOW","LSI","MTB","M","MRO","MPC","MAR","MMC","MAS","MA","MAT","MKC","MCD",
+        "MHP","MCK","MJN","MWV","MDT","MRK","MET","PCS","MCHP","MU","MSFT","MOLX","TAP","MON",
+        "MNST","MCO","MS","MOS","MSI","MUR","MYL","NBR","NDAQ","NOV","NTAP","NFLX","NWL","NFX",
+        "NEM","NWSA","NEE","NKE","NI","NE","NBL","JWN","NSC","NTRS","NOC","NU","NRG","NUE",
+        "NVDA","NYX","ORLY","OXY","OMC","OKE","ORCL","OI","PCAR","PLL","PH","PDCO","PAYX",
+        "BTU","JCP","PBCT","POM","PEP","PKI","PRGO","PFE","PCG","PM","PSX","PNW","PXD","PBI",
+        "PCL","PNC","RL","PPG","PPL","PX","PCP","PCLN","PFG","PG","PGR","PLD","PRU","PEG",
+        "PSA","PHM","QEP","PWR","QCOM","DGX","RRC","RTN","RHT","RF","RSG","RAI","RHI","ROK",
+        "COL","ROP","ROST","RDC","R","SWY","SAI","CRM","SNDK","SCG","SLB","SNI","STX","SEE",
+        "SHLD","SRE","SHW","SIAL","SPG","SLM","SJM","SNA","SO","LUV","SWN","SE","S","STJ",
+        "SWK","SPLS","SBUX","HOT","STT","SRCL","SYK","SUN","STI","SYMC","SYY","TROW","TGT",
+        "TEL","TE","THC","TDC","TER","TSO","TXN","TXT","HSY","TRV","TMO","TIF","TWX","TWC",
+        "TIE","TJX","TMK","TSS","TRIP","TSN","TYC","USB","UNP","UNH","UPS","X","UTX","UNM",
+        "URBN","VFC","VLO","VAR","VTR","VRSN","VZ","VIAB","V","VNO","VMC","WMT","WAG","DIS",
+        "WPO","WM","WAT","WPI","WLP","WFC","WDC","WU","WY","WHR","WFM","WMB","WIN","WEC",
+        "WPX","WYN","WYNN","XEL","XRX","XLNX","XL","XYL","YHOO","YUM","ZMH","ZION"
     ]
     return tickers
+
 
 
 # -----------------------------
