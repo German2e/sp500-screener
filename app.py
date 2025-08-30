@@ -2,22 +2,25 @@ import pandas as pd
 import numpy as np
 import yfinance as yf
 import streamlit as st
-import time
-import os
-import pickle
 from typing import List
+import time
 
 # -----------------------------
-# Preloaded S&P500 tickers
+# Preloaded S&P 500 tickers (latest)
 # -----------------------------
-SP500_TICKERS = [
-    "AAPL","MSFT","GOOG","AMZN","FB","TSLA","NVDA","BRK-B","JNJ","JPM",
-    "V","PG","UNH","HD","DIS","MA","PYPL","BAC","CMCSA","XOM","VZ",
-    # ... continue full S&P500 list or a significant subset
-]
+@st.cache_data
+def get_sp500_tickers() -> List[str]:
+    return [
+        "AAPL","MSFT","GOOGL","AMZN","FB","TSLA","NVDA","JPM","V","JNJ","UNH","HD","PG","MA",
+        "DIS","PYPL","BAC","CMCSA","ADBE","NFLX","KO","XOM","NKE","PFE","MRK","VZ","INTC",
+        "T","CSCO","PEP","ABT","CVX","CRM","ACN","WMT","ORCL","ABBV","COST","AVGO","QCOM",
+        "MDT","MCD","TXN","LLY","NEE","DHR","BMY","HON","PM","UNP","LIN","LOW","IBM","SBUX",
+        "RTX","GE","AMD","ALNY","LYB","DD","LNG","PSX","LDOS","GH","MSTR"
+        # ... add remaining tickers if needed
+    ]
 
 # -----------------------------
-# Technical Indicators
+# Indicators
 # -----------------------------
 def sma(series: pd.Series, window: int) -> pd.Series:
     return series.rolling(window=window, min_periods=window).mean()
@@ -25,14 +28,14 @@ def sma(series: pd.Series, window: int) -> pd.Series:
 def rsi(series: pd.Series, window: int = 14) -> pd.Series:
     delta = series.diff()
     up = delta.clip(lower=0)
-    down = -delta.clip(upper=0)
+    down = -1 * delta.clip(upper=0)
     ma_up = up.ewm(alpha=1/window, adjust=False, min_periods=window).mean()
     ma_down = down.ewm(alpha=1/window, adjust=False, min_periods=window).mean()
     rs = ma_up / ma_down
     return 100 - (100 / (1 + rs))
 
 # -----------------------------
-# Fetch stock data
+# Fetch data safely
 # -----------------------------
 def fetch_data(ticker: str, period: str = "240d", interval: str = "1d") -> pd.DataFrame:
     df = yf.download(ticker, period=period, interval=interval, progress=False)
@@ -41,7 +44,7 @@ def fetch_data(ticker: str, period: str = "240d", interval: str = "1d") -> pd.Da
     return df
 
 # -----------------------------
-# Screen conditions per style
+# Condition checkers
 # -----------------------------
 def check_conditions(df: pd.DataFrame, style: str, params: dict):
     df = df.copy()
@@ -57,106 +60,85 @@ def check_conditions(df: pd.DataFrame, style: str, params: dict):
     latest = df.iloc[-1]
     partial = {}
 
-    if style == "Momentum + Breakout":
-        cond_ma = latest["SMA20"] > latest["SMA50"]
-        cond_rsi = 40 <= latest["RSI14"] <= 60
-        cond_vol = latest["Volume"] > latest["VOL20"]
-        consolidation_high = df["Close"].iloc[-(params["lookback_days"]+1):-1].max()
-        cond_breakout = (latest["Close"] > consolidation_high) and (latest["Close"] <= consolidation_high*(1+params["breakout_buffer"]))
-        partial = {
-            "SMA20>SMA50": cond_ma,
-            "RSI40-60": cond_rsi,
-            "Volume>VOL20": cond_vol,
-            "Breakout": cond_breakout
-        }
-        return cond_ma and cond_rsi and cond_vol and cond_breakout, partial
+    try:
+        # Momentum + Breakout
+        if style == "Momentum + Breakout":
+            cond_ma = latest["SMA20"] > latest["SMA50"]
+            cond_rsi = 40 <= latest["RSI14"] <= 60
+            cond_vol = latest["Volume"] > latest["VOL20"]
+            consolidation_high = df["Close"].iloc[-(params["lookback_days"]+1):-1].max()
+            cond_breakout = (latest["Close"] > consolidation_high) and (latest["Close"] <= consolidation_high * (1 + params["breakout_buffer"]))
+            partial = {
+                "SMA20>SMA50": cond_ma,
+                "RSI40-60": cond_rsi,
+                "Volume>VOL20": cond_vol,
+                "Breakout": cond_breakout
+            }
+            return all(partial.values()), partial
 
-    elif style == "Pullback":
-        cond_pullback = latest["Close"] < latest["SMA20"] and latest["Close"] > latest["SMA50"]
-        cond_rsi = latest["RSI14"] < 50
-        partial = {"Pullback": cond_pullback, "RSI<50": cond_rsi}
-        return cond_pullback and cond_rsi, partial
+        # Pullback
+        elif style == "Pullback":
+            cond_pullback = latest["Close"] < latest["SMA20"] and latest["Close"] > latest["SMA50"]
+            cond_rsi = latest["RSI14"] < 50
+            partial = {"Pullback": cond_pullback, "RSI<50": cond_rsi}
+            return all(partial.values()), partial
 
-    elif style == "MA Crossover":
-        cond_ma = latest["SMA20"] > latest["SMA50"] and latest["SMA50"] > latest["SMA200"]
-        partial = {"MA Crossover": cond_ma}
-        return cond_ma, partial
+        # MA Crossover
+        elif style == "MA Crossover":
+            cond_ma = latest["SMA20"] > latest["SMA50"] and latest["SMA50"] > latest["SMA200"]
+            partial = {"MA Crossover": cond_ma}
+            return cond_ma, partial
 
-    elif style == "RSI Range":
-        cond_rsi = 40 <= latest["RSI14"] <= 60
-        partial = {"RSI40-60": cond_rsi}
-        return cond_rsi, partial
+        # RSI Range
+        elif style == "RSI Range":
+            cond_rsi = 40 <= latest["RSI14"] <= 60
+            partial = {"RSI40-60": cond_rsi}
+            return cond_rsi, partial
 
-    return False, partial
+    except Exception as e:
+        return False, {}
 
-# -----------------------------
-# Caching mechanism
-# -----------------------------
-CACHE_FILE = "sp500_data.pkl"
-TIMESTAMP_FILE = "last_fetch_time.txt"
-
-def save_cache(data_dict):
-    with open(CACHE_FILE, "wb") as f:
-        pickle.dump(data_dict, f)
-    with open(TIMESTAMP_FILE, "w") as f:
-        f.write(str(time.time()))
-
-def load_cache() -> dict:
-    if os.path.exists(CACHE_FILE):
-        with open(CACHE_FILE, "rb") as f:
-            return pickle.load(f)
-    return {}
-
-def cache_expired(days: int = 7) -> bool:
-    if os.path.exists(TIMESTAMP_FILE):
-        with open(TIMESTAMP_FILE, "r") as f:
-            last_fetch = float(f.read())
-        return (time.time() - last_fetch) > days*24*3600
-    return True
+    return False, {}
 
 # -----------------------------
-# Screen stocks
+# Screener
 # -----------------------------
-def screen_stocks(tickers: List[str], style: str, params: dict) -> pd.DataFrame:
+def screen_stocks(tickers: List[str], style: str, retries: int = 2, delay: float = 0.5, **params):
     results = []
     progress = st.progress(0)
     total = len(tickers)
 
-    # Load cached data if available and fresh
-    if not cache_expired():
-        st.info("Loading cached data...")
-        data_dict = load_cache()
-    else:
-        st.info("Fetching latest data for tickers...")
-        data_dict = {}
-        for i, t in enumerate(tickers):
+    for i, t in enumerate(tickers):
+        df = None
+        for attempt in range(retries):
             df = fetch_data(t)
             if df is not None:
-                data_dict[t] = df
-            progress.progress((i+1)/total)
-        save_cache(data_dict)
+                break
+            time.sleep(delay)
 
-    # Scan each stock
-    for i, t in enumerate(tickers):
-        df = data_dict.get(t)
         if df is None or df.empty:
             continue
-        try:
-            meets, partial = check_conditions(df, style, params)
-            latest = df.iloc[-1]
-            results.append({
-                "Ticker": t,
-                "Meets_Entry": meets,
-                "Close": round(latest["Close"],2),
-                "RSI14": round(rsi(df["Close"]).iloc[-1],2),
-                "SMA20": round(sma(df["Close"],20).iloc[-1],2),
-                "SMA50": round(sma(df["Close"],50).iloc[-1],2),
-                "Volume": int(latest["Volume"]),
-                "VOL20": int(sma(df["Volume"],20).iloc[-1]),
-                "Partial_Match": partial
-            })
-        except Exception as e:
-            st.warning(f"Skipping {t}: {e}")
+
+        meets, partial = check_conditions(df, style, params)
+
+        latest_close = df["Close"].iloc[-1] if not df.empty else None
+        latest_rsi = rsi(df["Close"]).iloc[-1] if not df.empty else None
+        sma20_val = sma(df["Close"], 20).iloc[-1] if not df.empty else None
+        sma50_val = sma(df["Close"], 50).iloc[-1] if not df.empty else None
+        vol = df["Volume"].iloc[-1] if not df.empty else None
+        vol20 = sma(df["Volume"], 20).iloc[-1] if not df.empty else None
+
+        results.append({
+            "Ticker": t,
+            "Meets_Entry": meets,
+            "Close": round(latest_close, 2) if latest_close is not None else None,
+            "RSI14": round(latest_rsi, 2) if latest_rsi is not None else None,
+            "SMA20": round(sma20_val, 2) if sma20_val is not None else None,
+            "SMA50": round(sma50_val, 2) if sma50_val is not None else None,
+            "Volume": int(vol) if vol is not None else None,
+            "VOL20": int(vol20) if vol20 is not None else None,
+            "Partial_Match": partial
+        })
         progress.progress((i+1)/total)
 
     return pd.DataFrame(results)
@@ -176,22 +158,26 @@ params["sma50"] = st.sidebar.slider("SMA50", 20, 100, 50)
 params["sma200"] = st.sidebar.slider("SMA200", 50, 250, 200)
 
 if st.sidebar.button("Run Screener"):
-    df_results = screen_stocks(SP500_TICKERS, style, params)
-    if df_results.empty:
-        st.warning("No valid stock data returned. Try again later or adjust filters.")
+    tickers = get_sp500_tickers()
+    if not tickers:
+        st.warning("No tickers to scan.")
     else:
-        matches = df_results[df_results["Meets_Entry"]]
-        st.success(f"Found {len(matches)} matches!")
-        st.dataframe(matches)
+        st.info(f"Scanning {len(tickers)} tickers for {style} strategy...")
+        df_results = screen_stocks(tickers, style, **params)
+        if "Meets_Entry" not in df_results.columns:
+            st.warning("No valid stock data returned. Try again later or adjust filters.")
+        else:
+            matches = df_results[df_results["Meets_Entry"] == True]
+            st.success(f"Found {len(matches)} matches!")
+            st.dataframe(matches)
 
-        if not matches.empty:
-            csv = matches.to_csv(index=False).encode('utf-8')
-            st.download_button(
-                label="Download Matches as CSV",
-                data=csv,
-                file_name=f"{style.replace(' ','_')}_matches.csv",
-                mime="text/csv"
-            )
-
+            if not matches.empty:
+                csv = matches.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    label="Download Matches as CSV",
+                    data=csv,
+                    file_name=f"{style.replace(' ', '_')}_matches.csv",
+                    mime="text/csv"
+                )
 
 
