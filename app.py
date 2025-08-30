@@ -166,22 +166,51 @@ params["sma50"] = st.sidebar.slider("SMA50", 20, 100, 50)
 params["sma200"] = st.sidebar.slider("SMA200", 50, 250, 200)
 
 # Run screener
-if st.sidebar.button("Run Screener"):
-    tickers = get_sp500_tickers()
-    if not tickers:
-        st.error("No tickers to scan. Check both Wikipedia and Finviz sources.")
-    else:
-        st.info(f"Scanning {len(tickers)} tickers for {style} strategy...")
-        df_results = screen_stocks(tickers, style, **params)
-        matches = df_results[df_results["Meets_Entry"]]
-        st.success(f"Found {len(matches)} matches!")
-        st.dataframe(matches)
 
-        if not matches.empty:
-            csv = matches.to_csv(index=False).encode('utf-8')
-            st.download_button(
-                label="Download Matches as CSV",
-                data=csv,
-                file_name=f"{style.replace(' ', '_')}_matches.csv",
-                mime="text/csv"
-            )
+if st.sidebar.button("Run Screener"):
+
+    tickers = get_sp500_tickers()
+
+    if not tickers:
+
+        st.error("No tickers available. Check Wikipedia/Finviz source or network.")
+
+    else:
+
+        st.info(f"Scanning {len(tickers)} tickers for {style} strategy...")
+
+        df_results = screen_stocks(tickers, style, **params)
+
+
+
+        if df_results.empty or "Meets_Entry" not in df_results.columns:
+
+            st.warning("No valid stock data returned. Try again later or adjust filters.")
+
+        else:
+
+            matches = df_results[df_results["Meets_Entry"]]
+
+            st.success(f"Found {len(matches)} matches!")
+
+            st.dataframe(matches)
+
+
+
+            if not matches.empty:
+
+                csv = matches.to_csv(index=False).encode('utf-8')
+
+                st.download_button(
+
+                    label="Download Matches as CSV",
+
+                    data=csv,
+
+                    file_name=f"{style.replace(' ', '_')}_matches.csv",
+
+                    mime="text/csv"
+
+                )
+
+
