@@ -63,7 +63,7 @@ def fetch_data(ticker: str, period: str = "600d", interval: str = "1d") -> pd.Da
     return df
 
 # -----------------------------
-# Condition checkers (returns partial info for debug)
+# Condition checkers (safe boolean checks)
 # -----------------------------
 def check_conditions(df: pd.DataFrame, style: str, params: dict) -> (bool, dict):
     df = df.copy()
@@ -79,12 +79,26 @@ def check_conditions(df: pd.DataFrame, style: str, params: dict) -> (bool, dict)
     latest = df.iloc[-1]
     partial = {}
 
+    # Momentum + Breakout
     if style == "Momentum + Breakout":
-        cond_ma = not pd.isna(latest["SMA20"]) and not pd.isna(latest["SMA50"]) and latest["SMA20"] > latest["SMA50"]
-        cond_rsi = not pd.isna(latest["RSI14"]) and 40 <= latest["RSI14"] <= 60
-        cond_vol = not pd.isna(latest["VOL20"]) and latest["Volume"] > latest["VOL20"]
+        sma20_val = latest["SMA20"]
+        sma50_val = latest["SMA50"]
+        rsi_val = latest["RSI14"]
+        vol_val = latest["VOL20"]
+
+        if pd.isna(sma20_val) or pd.isna(sma50_val) or pd.isna(rsi_val) or pd.isna(vol_val):
+            return False, {}
+
+        cond_ma = float(sma20_val) > float(sma50_val)
+        cond_rsi = 40 <= float(rsi_val) <= 60
+        cond_vol = latest["Volume"] > float(vol_val)
+
         consolidation_high = df["Close"].iloc[-(params["lookback_days"]+1):-1].max()
-        cond_breakout = (not pd.isna(consolidation_high)) and (latest["Close"] > consolidation_high) and (latest["Close"] <= consolidation_high * (1 + params["breakout_buffer"]))
+        if pd.isna(consolidation_high):
+            cond_breakout = False
+        else:
+            cond_breakout = (latest["Close"] > consolidation_high) and \
+                            (latest["Close"] <= consolidation_high * (1 + params["breakout_buffer"]))
 
         partial = {
             "SMA20>SMA50": cond_ma,
@@ -95,19 +109,40 @@ def check_conditions(df: pd.DataFrame, style: str, params: dict) -> (bool, dict)
 
         return bool(cond_ma and cond_rsi and cond_vol and cond_breakout), partial
 
+    # Pullback
     elif style == "Pullback":
-        cond_pullback = not pd.isna(latest["SMA20"]) and not pd.isna(latest["SMA50"]) and latest["Close"] < latest["SMA20"] and latest["Close"] > latest["SMA50"]
-        cond_rsi = not pd.isna(latest["RSI14"]) and latest["RSI14"] < 50
+        sma20_val = latest["SMA20"]
+        sma50_val = latest["SMA50"]
+        rsi_val = latest["RSI14"]
+
+        if pd.isna(sma20_val) or pd.isna(sma50_val) or pd.isna(rsi_val):
+            return False, {}
+
+        cond_pullback = latest["Close"] < float(sma20_val) and latest["Close"] > float(sma50_val)
+        cond_rsi = rsi_val < 50
+
         partial = {"Pullback": cond_pullback, "RSI<50": cond_rsi}
         return bool(cond_pullback and cond_rsi), partial
 
+    # MA Crossover
     elif style == "MA Crossover":
-        cond_ma = not pd.isna(latest["SMA20"]) and not pd.isna(latest["SMA50"]) and not pd.isna(latest["SMA200"]) and latest["SMA20"] > latest["SMA50"] and latest["SMA50"] > latest["SMA200"]
+        sma20_val = latest["SMA20"]
+        sma50_val = latest["SMA50"]
+        sma200_val = latest["SMA200"]
+
+        if pd.isna(sma20_val) or pd.isna(sma50_val) or pd.isna(sma200_val):
+            return False, {}
+
+        cond_ma = float(sma20_val) > float(sma50_val) and float(sma50_val) > float(sma200_val)
         partial = {"MA Crossover": cond_ma}
         return cond_ma, partial
 
+    # RSI Range
     elif style == "RSI Range":
-        cond_rsi = not pd.isna(latest["RSI14"]) and 40 <= latest["RSI14"] <= 60
+        rsi_val = latest["RSI14"]
+        if pd.isna(rsi_val):
+            return False, {}
+        cond_rsi = 40 <= float(rsi_val) <= 60
         partial = {"RSI40-60": cond_rsi}
         return cond_rsi, partial
 
