@@ -1,128 +1,132 @@
+import streamlit as st
 import yfinance as yf
 import pandas as pd
 import numpy as np
-import streamlit as st
-from typing import List
 
-# -----------------------------
-# Preloaded S&P 500 tickers
-# -----------------------------
+# --- Preloaded S&P 500 tickers (shortened here for space, load full list in your code)
 SP500_TICKERS = [
-    "AAPL","MSFT","AMZN","GOOGL","GOOG","TSLA","BRK.B","NVDA","META","UNH",
-    "JNJ","V","JPM","PG","HD","MA","DIS","PYPL","BAC","ADBE","CMCSA","NFLX",
-    # … add all 500 tickers here …
+    "AAPL", "MSFT", "GOOGL", "AMZN", "META", "TSLA", "NVDA", "JPM", "V", "PG",
+    "UNH", "HD", "MA", "CVX", "XOM", "LLY", "PFE", "ABBV", "MRK", "KO",
+    # ... include all 500 tickers
 ]
 
-# -----------------------------
-# Indicators
-# -----------------------------
-def sma(series: pd.Series, window: int) -> pd.Series:
-    if len(series) < window:
-        return pd.Series([np.nan]*len(series))
-    return series.rolling(window=window, min_periods=window).mean()
+# --- Helpers
+def safe_sma(df, col, window):
+    if col not in df:
+        return pd.Series([np.nan] * len(df), index=df.index)
+    return df[col].rolling(window=window, min_periods=1).mean()
 
-# -----------------------------
-# Fetch data safely
-# -----------------------------
-def fetch_data(ticker: str, period: str = "1y", interval: str = "1d") -> pd.DataFrame:
+def fetch_data(ticker, period="1y"):
     try:
-        df = yf.download(ticker, period=period, interval=interval, progress=False)
+        df = yf.download(ticker, period=period, progress=False, threads=False)
         if df.empty:
             return None
-        df["SMA20"] = sma(df["Close"], 20)
-        df["SMA50"] = sma(df["Close"], 50)
-        df["SMA200"] = sma(df["Close"], 200)
         return df
-    except Exception as e:
+    except Exception:
         return None
 
-# -----------------------------
-# Strategy checks
-# -----------------------------
-def check_momentum(df: pd.DataFrame, crossover_days: int = 7) -> bool:
-    if df is None or len(df) < 50:
+# --- Strategies
+def check_momentum(df, lookback_days=7) -> bool:
+    if df is None or df.shape[0] < 60:
         return False
-    recent = df.tail(crossover_days)
-    # Price above 20MA
+    df["SMA20"] = safe_sma(df, "Close", 20)
+    df["SMA50"] = safe_sma(df, "Close", 50)
+
+    if pd.isna(df["SMA20"].iloc[-1]) or pd.isna(df["SMA50"].iloc[-1]):
+        return False
+
     cond_price = df["Close"].iloc[-1] > df["SMA20"].iloc[-1]
-    # 20MA above 50MA
     cond_ma = df["SMA20"].iloc[-1] > df["SMA50"].iloc[-1]
-    # 20MA cut above 50MA in last X days
-    cross = (recent["SMA20"] > recent["SMA50"]) & (recent["SMA20"].shift(1) <= recent["SMA50"].shift(1))
-    cond_cross = cross.any()
-    return cond_price and cond_ma and cond_cross
 
-def check_breakout(df: pd.DataFrame) -> bool:
-    if df is None or len(df) < 50:
+    recent = df.iloc[-lookback_days:]
+    cross = ((recent["SMA20"] > recent["SMA50"]) &
+             (recent["SMA20"].shift(1) <= recent["SMA50"].shift(1))).any()
+
+    return bool(cond_price and cond_ma and cross)
+
+def check_breakout(df, lookback_days=7) -> bool:
+    if df is None or df.shape[0] < 60:
         return False
-    recent = df.tail(20)
-    # Price under 20MA
-    cond_price = df["Close"].iloc[-1] < df["SMA20"].iloc[-1]
-    # 20MA moving back to 50MA (approaching from below)
-    cond_ma = df["SMA20"].iloc[-1] < df["SMA50"].iloc[-1] and df["SMA20"].iloc[-2] < df["SMA50"].iloc[-2]
-    # Price consolidating (within 5% range)
-    range_pct = (recent["Close"].max() - recent["Close"].min()) / recent["Close"].min()
-    cond_range = range_pct <= 0.05
-    return cond_price and cond_ma and cond_range
+    df["SMA20"] = safe_sma(df, "Close", 20)
+    df["SMA50"] = safe_sma(df, "Close", 50)
 
-def check_pullback(df: pd.DataFrame) -> bool:
-    if df is None or len(df) < 50:
+    if pd.isna(df["SMA20"].iloc[-1]) or pd.isna(df["SMA50"].iloc[-1]):
         return False
-    # Downtrend: 20<50<200
-    downtrend = df["SMA20"].iloc[-1] < df["SMA50"].iloc[-1] < df["SMA200"].iloc[-1]
-    # Price bottomed and now above 20MA
-    recovery = df["Close"].iloc[-1] > df["SMA20"].iloc[-1] and df["SMA20"].iloc[-1] > df["SMA50"].iloc[-1]
-    return downtrend and recovery
 
-# -----------------------------
-# Screen stocks
-# -----------------------------
-def screen_stocks(tickers: List[str], strategy: str, crossover_days: int = 7) -> pd.DataFrame:
+    cond1 = df["Close"].iloc[-1] < df["SMA20"].iloc[-1]  # price dipped below 20MA
+    cond2 = df["SMA20"].iloc[-1] > df["SMA50"].iloc[-1]  # 20MA still > 50MA
+
+    recent = df.iloc[-lookback_days:]
+    consolidating = (recent["Close"].max() - recent["Close"].min()) / recent["Close"].mean() < 0.05
+
+    return bool(cond1 and cond2 and consolidating)
+
+def check_pullback(df, lookback_days=7) -> bool:
+    if df is None or df.shape[0] < 200:
+        return False
+    df["SMA20"] = safe_sma(df, "Close", 20)
+    df["SMA50"] = safe_sma(df, "Close", 50)
+    df["SMA200"] = safe_sma(df, "Close", 200)
+
+    if pd.isna(df["SMA20"].iloc[-1]) or pd.isna(df["SMA50"].iloc[-1]) or pd.isna(df["SMA200"].iloc[-1]):
+        return False
+
+    cond_downtrend = (
+        df["Close"].iloc[-1] < df["SMA20"].iloc[-1] and
+        df["SMA20"].iloc[-1] < df["SMA50"].iloc[-1] and
+        df["SMA50"].iloc[-1] < df["SMA200"].iloc[-1]
+    )
+
+    cond_recovery = (
+        df["Close"].iloc[-1] > df["SMA20"].iloc[-1] and
+        ((df["SMA20"] > df["SMA50"]) &
+         (df["SMA20"].shift(1) <= df["SMA50"].shift(1))).any()
+    )
+
+    return bool(cond_recovery and not cond_downtrend)
+
+# --- Screening logic
+def screen_stocks(tickers, strategy, lookback_days=7):
     results = []
-    progress = st.progress(0)
-    total = len(tickers)
-    for i, t in enumerate(tickers):
-        df = fetch_data(t)
-        meets = False
-        if strategy == "Momentum":
-            meets = check_momentum(df, crossover_days)
-        elif strategy == "Breakout":
-            meets = check_breakout(df)
-        elif strategy == "Pullback":
-            meets = check_pullback(df)
-        if df is not None:
+    for ticker in tickers:
+        df = fetch_data(ticker)
+        if df is None:
+            results.append({"Ticker": ticker, "Meets_Entry": False, "Notes": "Data unavailable"})
+            continue
+        try:
+            if strategy == "Momentum":
+                meets = check_momentum(df, lookback_days)
+            elif strategy == "Breakout":
+                meets = check_breakout(df, lookback_days)
+            elif strategy == "Pullback":
+                meets = check_pullback(df, lookback_days)
+            else:
+                meets = False
             results.append({
-                "Ticker": t,
+                "Ticker": ticker,
+                "Price": round(df["Close"].iloc[-1], 2),
                 "Meets_Entry": meets,
-                "Close": round(df["Close"].iloc[-1], 2),
-                "SMA20": round(df["SMA20"].iloc[-1], 2) if not np.isnan(df["SMA20"].iloc[-1]) else None,
-                "SMA50": round(df["SMA50"].iloc[-1], 2) if not np.isnan(df["SMA50"].iloc[-1]) else None,
-                "SMA200": round(df["SMA200"].iloc[-1], 2) if not np.isnan(df["SMA200"].iloc[-1]) else None,
+                "Notes": ""
             })
-        progress.progress((i+1)/total)
+        except Exception as e:
+            results.append({"Ticker": ticker, "Meets_Entry": False, "Notes": str(e)})
     return pd.DataFrame(results)
 
-# -----------------------------
-# Streamlit interface
-# -----------------------------
-st.title("S&P 500 Multi-Style Screener")
+# --- Streamlit UI
+st.title("📈 S&P 500 Screener (Momentum, Breakout, Pullback)")
 
-strategy = st.sidebar.selectbox("Select Strategy:", ["Momentum", "Breakout", "Pullback"])
-crossover_days = st.sidebar.slider("Momentum Crossover Window (days)", 3, 14, 7)
+strategy = st.selectbox("Choose strategy:", ["Momentum", "Breakout", "Pullback"])
+lookback_days = st.slider("Lookback days for signals", 3, 30, 7)
 
-if st.sidebar.button("Run Screener"):
-    st.info(f"Scanning {len(SP500_TICKERS)} tickers for {strategy} strategy...")
-    df_results = screen_stocks(SP500_TICKERS, strategy, crossover_days)
-    matches = df_results[df_results["Meets_Entry"]]
-    st.success(f"Found {len(matches)} matches!")
-    st.dataframe(matches)
+if st.button("Run Screener"):
+    with st.spinner("Screening stocks..."):
+        df_results = screen_stocks(SP500_TICKERS, strategy, lookback_days)
 
-    if not matches.empty:
-        csv = matches.to_csv(index=False).encode('utf-8')
-        st.download_button(
-            label="Download Matches as CSV",
-            data=csv,
-            file_name=f"{strategy.replace(' ', '_')}_matches.csv",
-            mime="text/csv"
-        )
+    if not df_results.empty:
+        matches = df_results[df_results["Meets_Entry"]]
+        st.subheader(f"✅ Matches found: {len(matches)}")
+        st.dataframe(matches)
+    else:
+        st.warning("No valid stock data returned.")
+
 
