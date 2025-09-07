@@ -55,7 +55,7 @@ SP500_TICKERS = [
     "LMT", "MO", "DUK", "CSCO", "GE", "MDT", "WBA", "SO", "BMY", "DUK", "LMT", "CL", "COP",
     "PLD", "LMT", "MO", "DUK", "CSCO", "GE", "MDT", "WBA", "SO", "BMY", "DUK", "LMT", "CL",
     "COP", "PLD", "LMT", "MO", "DUK", "CSCO", "GE", "MDT", "WBA", "SO", "BMY", "DUK", "LMT",
-    "CL", "COP", "PLD", "LMT", "MO", "DU
+    "CL", "COP", "PLD", "LMT", "MO", "DU"
 ]
 
 # -----------------------------
