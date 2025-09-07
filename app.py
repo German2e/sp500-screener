@@ -139,7 +139,3 @@ if st.button("Run Screener"):
         st.write(matches)
     else:
         st.warning("No matches found. Try adjusting parameters.")
-
-
-
-
