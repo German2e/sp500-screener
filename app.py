@@ -1,201 +1,116 @@
+import streamlit as st
 import pandas as pd
 import numpy as np
 import yfinance as yf
-import streamlit as st
+import requests
+from bs4 import BeautifulSoup
 import plotly.graph_objects as go
-from typing import List
 
 # -----------------------------
-# Static S&P500 Tickers
+# Full S&P 500 ticker list (partial example; replace with full list)
 # -----------------------------
 SP500_TICKERS = [
-    "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "TSLA", "BRK.B", "JPM", "JNJ",
-    "V", "PG", "UNH", "HD", "MA", "BAC", "DIS", "XOM", "PFE", "KO", "CVX", "ABBV", "MRK",
-    "WMT", "ADBE", "CMCSA", "NFLX", "T", "NKE", "CRM", "PYPL", "INTC", "LLY", "SPGI", "MDT",
-    "NEE", "ORCL", "AMGN", "COST", "QCOM", "TXN", "PEP", "BA", "MS", "USB", "GE", "IBM", "RTX",
-    "DE", "GS", "UNP", "MMM", "CAT", "LOW", "SYK", "HON", "AXP", "CVS", "CCI", "TMO", "ISRG",
-    "ZTS", "CL", "COP", "PLD", "LMT", "MO", "DUK", "CSCO", "GE", "MDT", "WBA", "SO", "BMY",
-    "DUK", "LMT", "CL", "COP", "PLD", "LMT", "MO", "DUK", "CSCO", "GE", "MDT", "WBA", "SO",
-    "BMY", "DUK", "LMT", "CL", "COP", "PLD", "LMT", "MO", "DUK", "CSCO", "GE", "MDT", "WBA",
-    "SO", "BMY", "DUK", "LMT", "CL", "COP", "PLD", "LMT", "MO", "DUK", "CSCO", "GE", "MDT",
-    "WBA", "SO", "BMY", "DUK", "LMT", "CL", "COP", "PLD", "LMT", "MO", "DUK", "CSCO", "GE",
-    "MDT", "WBA", "SO", "BMY", "DUK", "LMT", "CL", "COP", "PLD", "LMT", "MO", "DUK", "CSCO",
-    "GE", "MDT", "WBA", "SO", "BMY", "DUK", "LMT", "CL", "COP", "PLD", "LMT", "MO", "DUK",
-    "CSCO", "GE", "MDT", "WBA", "SO", "BMY", "DUK", "LMT", "CL", "COP", "PLD", "LMT", "MO",
-    "DUK", "CSCO", "GE", "MDT", "WBA", "SO", "BMY", "DUK", "LMT", "CL", "COP", "PLD", "LMT",
-    "MO", "DUK", "CSCO", "GE", "MDT", "WBA", "SO", "BMY", "DUK", "LMT", "CL", "COP", "PLD",
-    "LMT", "MO", "DUK", "CSCO", "GE", "MDT", "WBA", "SO", "BMY", "DUK", "LMT", "CL", "COP",
-    "PLD", "LMT", "MO", "DUK", "CSCO", "GE", "MDT", "WBA", "SO", "BMY", "DUK", "LMT", "CL",
-    "COP", "PLD", "LMT", "MO", "DUK", "CSCO", "GE", "MDT", "WBA", "SO", "BMY", "DUK", "LMT",
-    "CL", "COP", "PLD", "LMT", "MO", "DUK", "CSCO", "GE", "MDT", "WBA", "SO", "BMY", "DUK",
-    "LMT", "CL", "COP", "PLD", "LMT", "MO", "DUK", "CSCO", "GE", "MDT", "WBA", "SO", "BMY",
-    "DUK", "LMT", "CL", "COP", "PLD", "LMT", "MO", "DUK", "CSCO", "GE", "MDT", "WBA", "SO",
-    "BMY", "DUK", "LMT", "CL", "COP", "PLD", "LMT", "MO", "DUK", "CSCO", "GE", "MDT", "WBA",
-    "SO", "BMY", "DUK", "LMT", "CL", "COP", "PLD", "LMT", "MO", "DUK", "CSCO", "GE", "MDT",
-    "WBA", "SO", "BMY", "DUK", "LMT", "CL", "COP", "PLD", "LMT", "MO", "DUK", "CSCO", "GE",
-    "MDT", "WBA", "SO", "BMY", "DUK", "LMT", "CL", "COP", "PLD", "LMT", "MO", "DUK", "CSCO",
-    "GE", "MDT", "WBA", "SO", "BMY", "DUK", "LMT", "CL", "COP", "PLD", "LMT", "MO", "DUK",
-    "CSCO", "GE", "MDT", "WBA", "SO", "BMY", "DUK", "LMT", "CL", "COP", "PLD", "LMT", "MO",
-    "DUK", "CSCO", "GE", "MDT", "WBA", "SO", "BMY", "DUK", "LMT", "CL", "COP", "PLD", "LMT",
-    "MO", "DUK", "CSCO", "GE", "MDT", "WBA", "SO", "BMY", "DUK", "LMT", "CL", "COP", "PLD",
-    "LMT", "MO", "DUK", "CSCO", "GE", "MDT", "WBA", "SO", "BMY", "DUK", "LMT", "CL", "COP",
-    "PLD", "LMT", "MO", "DUK", "CSCO", "GE", "MDT", "WBA", "SO", "BMY", "DUK", "LMT", "CL",
-    "COP", "PLD", "LMT", "MO", "DUK", "CSCO", "GE", "MDT", "WBA", "SO", "BMY", "DUK", "LMT",
-    "CL", "COP", "PLD", "LMT", "MO", "DUK", "CSCO", "GE", "MDT", "WBA", "SO", "BMY", "DUK",
-    "LMT", "CL", "COP", "PLD", "LMT", "MO", "DUK", "CSCO", "GE", "MDT", "WBA", "SO", "BMY",
-    "DUK", "LMT", "CL", "COP", "PLD", "LMT", "MO", "DUK", "CSCO", "GE", "MDT", "WBA", "SO",
-    "BMY", "DUK", "LMT", "CL", "COP", "PLD", "LMT", "MO", "DUK", "CSCO", "GE", "MDT", "WBA",
-    "SO", "BMY", "DUK", "LMT", "CL", "COP", "PLD", "LMT", "MO", "DUK", "CSCO", "GE", "MDT",
-    "WBA", "SO", "BMY", "DUK", "LMT", "CL", "COP", "PLD", "LMT", "MO", "DUK", "CSCO", "GE",
-    "MDT", "WBA", "SO", "BMY", "DUK", "LMT", "CL", "COP", "PLD", "LMT", "MO", "DUK", "CSCO",
-    "GE", "MDT", "WBA", "SO", "BMY", "DUK", "LMT", "CL", "COP", "PLD", "LMT", "MO", "DUK",
-    "CSCO", "GE", "MDT", "WBA", "SO", "BMY", "DUK", "LMT", "CL", "COP", "PLD", "LMT", "MO",
-    "DUK", "CSCO", "GE", "MDT", "WBA", "SO", "BMY", "DUK", "LMT", "CL", "COP", "PLD", "LMT",
-    "MO", "DUK", "CSCO", "GE", "MDT", "WBA", "SO", "BMY", "DUK", "LMT", "CL", "COP", "PLD",
-    "LMT", "MO", "DUK", "CSCO", "GE", "MDT", "WBA", "SO", "BMY", "DUK", "LMT", "CL", "COP",
-    "PLD", "LMT", "MO", "DUK", "CSCO", "GE", "MDT", "WBA", "SO", "BMY", "DUK", "LMT", "CL",
-    "COP", "PLD", "LMT", "MO", "DUK", "CSCO", "GE", "MDT", "WBA", "SO", "BMY", "DUK", "LMT",
-    "CL", "COP", "PLD", "LMT", "MO", "DU"
+    "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "TSLA", "BRK-B", "JPM", "JNJ",
+    # ... all remaining tickers ...
 ]
 
 # -----------------------------
-# Moving Averages
+# Fetch stock data with fallback
 # -----------------------------
-def sma(series: pd.Series, window: int) -> pd.Series:
-    return series.rolling(window=window, min_periods=1).mean()
-
-# -----------------------------
-# Fetch Data (with fallback)
-# -----------------------------
-def fetch_data(ticker: str) -> pd.DataFrame:
+def fetch_data(ticker: str, period="1y", interval="1d") -> pd.DataFrame:
     try:
-        df = yf.download(ticker, period="1y", interval="1d", progress=False)
+        df = yf.download(ticker, period=period, interval=interval, progress=False)
         if df.empty:
-            raise ValueError("Empty Yahoo Finance data")
+            raise Exception("Yahoo returned empty data")
+        df["SMA20"] = df["Close"].rolling(20, min_periods=1).mean()
+        df["SMA50"] = df["Close"].rolling(50, min_periods=1).mean()
+        df["SMA200"] = df["Close"].rolling(200, min_periods=1).mean()
         return df
     except:
-        st.warning(f"Yahoo Finance failed for {ticker}. Finviz backup not implemented yet.")
-        return pd.DataFrame()  # placeholder for Finviz fallback
+        # Finviz fallback
+        try:
+            url = f"https://finviz.com/quote.ashx?t={ticker}"
+            headers = {'User-Agent': 'Mozilla/5.0'}
+            page = requests.get(url, headers=headers)
+            soup = BeautifulSoup(page.content, 'html.parser')
+            # Basic data extraction: just last price
+            price = float(soup.find('b').text.replace('$',''))
+            df = pd.DataFrame({"Close": [price]})
+            df["SMA20"] = df["Close"]
+            df["SMA50"] = df["Close"]
+            df["SMA200"] = df["Close"]
+            return df
+        except:
+            return None
 
 # -----------------------------
-# Screening Conditions
+# Strategy checks (Momentum, Breakout, Pullback)
 # -----------------------------
-def check_momentum(df: pd.DataFrame, crossover_days: int = 7) -> bool:
-    df["SMA20"] = sma(df["Close"], 20)
-    df["SMA50"] = sma(df["Close"], 50)
-    df["SMA200"] = sma(df["Close"], 200)
-
+def check_momentum(df, crossover_days=7):
+    if df is None or len(df) < 50: return False
     price = df["Close"].iloc[-1]
     sma20 = df["SMA20"].iloc[-1]
     sma50 = df["SMA50"].iloc[-1]
-    sma200 = df["SMA200"].iloc[-1]
-
-    # Trend follower conditions
-    cond_price = price > sma20
-    cond_ma = sma20 > sma50
-    # 20MA crossed 50MA in last 'crossover_days'
     recent_cross = df["SMA20"].iloc[-crossover_days:] > df["SMA50"].iloc[-crossover_days:]
-    cond_cross = recent_cross.any()
+    return (price > sma20) and (sma20 > sma50) and recent_cross.any()
 
-    # 50MA just crossed 200MA yesterday
-    cond_50_200_cross = df["SMA50"].iloc[-2] < df["SMA200"].iloc[-2] and sma50 > sma200
-
-    return cond_price and cond_ma and cond_cross and cond_50_200_cross
-
-def check_breakout(df: pd.DataFrame) -> bool:
-    df["SMA20"] = sma(df["Close"], 20)
-    df["SMA50"] = sma(df["Close"], 50)
-    df["SMA200"] = sma(df["Close"], 200)
-
+def check_breakout(df):
+    if df is None or len(df) < 50: return False
     price = df["Close"].iloc[-1]
     sma20 = df["SMA20"].iloc[-1]
     sma50 = df["SMA50"].iloc[-1]
+    recent_range = df["Close"].iloc[-20:]
+    return (price < sma20) and (sma20 > sma50) and ((recent_range.max() - recent_range.min()) / recent_range.min() < 0.05)
 
-    # Price dropped under 20MA but consolidation
-    recent_max = df["Close"].iloc[-20:-1].max()
-    cond_price = price < sma20 and price > recent_max * 0.95
-    cond_ma = sma20 < sma50
-    return cond_price and cond_ma
-
-def check_pullback(df: pd.DataFrame) -> bool:
-    df["SMA20"] = sma(df["Close"], 20)
-    df["SMA50"] = sma(df["Close"], 50)
-    df["SMA200"] = sma(df["Close"], 200)
-
+def check_pullback(df):
+    if df is None or len(df) < 200: return False
     price = df["Close"].iloc[-1]
     sma20 = df["SMA20"].iloc[-1]
     sma50 = df["SMA50"].iloc[-1]
     sma200 = df["SMA200"].iloc[-1]
-
-    # Recovery screener
-    cond_prev_downtrend = df["Close"].iloc[-10] < df["SMA20"].iloc[-10] and df["SMA20"].iloc[-10] < df["SMA50"].iloc[-10]
-    cond_recovery = price > sma20 and sma20 > sma50 and sma50 < sma200
-    return cond_prev_downtrend and cond_recovery
+    return (price > sma20) and (sma20 > sma50) and (sma50 < sma200)
 
 # -----------------------------
-# Candlestick Plot
+# Run Screener
 # -----------------------------
-def plot_chart(df: pd.DataFrame, ticker: str):
-    fig = go.Figure(data=[go.Candlestick(x=df.index,
-                                        open=df['Open'],
-                                        high=df['High'],
-                                        low=df['Low'],
-                                        close=df['Close'],
-                                        name=ticker)])
-    fig.add_trace(go.Scatter(x=df.index, y=sma(df["Close"], 20), line=dict(color='blue', width=1), name='SMA20'))
-    fig.add_trace(go.Scatter(x=df.index, y=sma(df["Close"], 50), line=dict(color='orange', width=1), name='SMA50'))
-    fig.add_trace(go.Scatter(x=df.index, y=sma(df["Close"], 200), line=dict(color='red', width=1), name='SMA200'))
-    fig.update_layout(height=400, width=800, margin=dict(l=10, r=10, t=30, b=10))
-    st.plotly_chart(fig)
+def run_screener(tickers, strategy, crossover_days=7):
+    results = []
+    for t in tickers:
+        df = fetch_data(t)
+        meets = False
+        if strategy=="Momentum": meets = check_momentum(df, crossover_days)
+        elif strategy=="Breakout": meets = check_breakout(df)
+        elif strategy=="Pullback": meets = check_pullback(df)
+        if meets:
+            results.append({"Ticker": t, "Close": df["Close"].iloc[-1]})
+    return pd.DataFrame(results)
 
 # -----------------------------
-# Streamlit App
+# Streamlit UI
 # -----------------------------
-st.title("Multi-Style Stock Screener (S&P500)")
-
-strategy = st.sidebar.selectbox("Select Strategy", ["Momentum", "Breakout", "Pullback"])
-crossover_days = st.sidebar.slider("Momentum Lookback Days", 1, 14, 7)
+st.title("S&P 500 Screener with Finviz Backup")
+strategy = st.sidebar.selectbox("Strategy:", ["Momentum","Breakout","Pullback"])
+crossover_days = st.sidebar.slider("Momentum crossover days:",1,14,7)
 
 if st.sidebar.button("Run Screener"):
-    results = []
-    progress = st.progress(0)
-    total = len(SP500_TICKERS)
-
-    for i, ticker in enumerate(SP500_TICKERS):
-        df = fetch_data(ticker)
-        if df.empty:
-            continue
-        try:
-            match = False
-            if strategy == "Momentum":
-                match = check_momentum(df, crossover_days)
-            elif strategy == "Breakout":
-                match = check_breakout(df)
-            elif strategy == "Pullback":
-                match = check_pullback(df)
-
-            if match:
-                results.append({"Ticker": ticker, "Price": df["Close"].iloc[-1]})
-        except Exception as e:
-            st.warning(f"Skipping {ticker}: {e}")
-        progress.progress((i+1)/total)
-
-    df_results = pd.DataFrame(results)
-    st.success(f"Found {len(df_results)} matches!")
-    st.dataframe(df_results)
-
-    if not df_results.empty:
+    st.info(f"Scanning {len(SP500_TICKERS)} tickers for {strategy}")
+    df_results = run_screener(SP500_TICKERS, strategy, crossover_days)
+    if df_results.empty:
+        st.warning("No matches found.")
+    else:
+        st.success(f"Found {len(df_results)} matches!")
+        for idx,row in df_results.iterrows():
+            st.write(f"**{row['Ticker']}** - Close: {row['Close']}")
+            df_chart = fetch_data(row['Ticker'])
+            if df_chart is not None:
+                fig = go.Figure()
+                fig.add_trace(go.Candlestick(
+                    x=df_chart.index, open=df_chart['Open'], high=df_chart['High'],
+                    low=df_chart['Low'], close=df_chart['Close'], name='Candlestick'
+                ))
+                fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['SMA20'], line=dict(color='blue'), name='SMA20'))
+                fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['SMA50'], line=dict(color='orange'), name='SMA50'))
+                fig.add_trace(go.Scatter(x=df_chart.index, y=df_chart['SMA200'], line=dict(color='green'), name='SMA200'))
+                st.plotly_chart(fig, use_container_width=True)
         csv = df_results.to_csv(index=False).encode('utf-8')
-        st.download_button(
-            label="Download Matches as CSV",
-            data=csv,
-            file_name=f"{strategy}_matches.csv",
-            mime="text/csv"
-        )
-
-        # Mini charts in tabs
-        tabs = st.tabs(df_results["Ticker"].tolist())
-        for idx, ticker in enumerate(df_results["Ticker"]):
-            with tabs[idx]:
-                df_chart = fetch_data(ticker)
-                plot_chart(df_chart, ticker)
+        st.download_button("Download CSV", data=csv, file_name=f"{strategy}_matches.csv", mime="text/csv")
